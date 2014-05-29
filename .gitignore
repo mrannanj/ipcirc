@@ -1,3 +1,5 @@
 /build
-/backend
-/front
+/ipc-back
+/ipc-proxy
+/ipc-front
+/.ycm_extra_conf.pyc
