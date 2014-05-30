@@ -15,6 +15,7 @@
 
 #include "common/common.h"
 #include "irc_conn.h"
+#include "unix_listen.h"
 #include "unix_conn.h"
 #include "conn.h"
 

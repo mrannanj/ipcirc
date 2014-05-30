@@ -25,7 +25,8 @@ void epoll_cont_serve(struct epoll_cont* e) {
     if (nfd < 0) die("epoll_wait");
     for (int i = 0; i < nfd; ++i) {
       uint32_t p = es[i].data.u32;
-      e->conns[p].cbs[EV_READY_TO_READ](e, p, NULL);
+      if (!e->conns[p].cbs[EV_READY_TO_READ](e, p, NULL))
+        e->conns[p].cbs[EV_CLOSE](e, p, NULL);
     }
   }
 }

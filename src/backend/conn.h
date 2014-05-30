@@ -4,13 +4,9 @@
 #include "irc_conn.h"
 #include "unix_conn.h"
 
-#define CONN_IRC 1
-#define CONN_UNIX 2
-#define CONN_UNIX_ACC 3
-
 struct epoll_cont;
 
-typedef void (*event_cb)(struct epoll_cont*, uint32_t, struct event*);
+typedef int (*event_cb)(struct epoll_cont*, uint32_t, struct event*);
 
 struct conn {
   int fd;

@@ -28,7 +28,7 @@ static const size_t NICK_LEN = 6;
 static const int ST_INIT = 0;
 static const int ST_FIRST_MSG = 1;
 
-void irc_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
+int irc_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
   irc_conn* i = &e->conns[p].data.irc;
   char* msg = ev->p;
   printf("%s", msg);
@@ -36,9 +36,10 @@ void irc_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
     i->state = ST_FIRST_MSG;
     send_init(e->conns[p].fd);
   }
+  return 1;
 }
 
-void irc_conn_unix_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
+int irc_conn_unix_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
   struct conn* c = &e->conns[p];
   char buf[IRC_MAXLEN];
   ssize_t len = strlen(ev->p);
@@ -48,17 +49,27 @@ void irc_conn_unix_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
   buf[len+1] = '\0';
   len += 1;
   ssize_t nwrote = write(c->fd, buf, len);
-  if (nwrote < 0) die("write");
-  if (len != nwrote) die2("partial write\n");
+  if (nwrote < 0) {
+    log_errno("write");
+    return 0;
+  } else if (len != nwrote) {
+    log("partial write on irc_conn %d", c->fd);
+    return 0;
+  }
+  return 1;
 }
 
-void irc_conn_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
+int irc_conn_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
   struct conn* c = &e->conns[p];
   irc_conn* i = &c->data.irc;
   ssize_t nread = read(c->fd, &i->buf[i->pos], IRC_MAXLEN - i->pos);
-  if (nread < 0) die("read");
-  if (nread == 0) die2("connection to irc lost\n");
+  if (nread < 0) {
+    log_errno("read"); return 0;
+  } else if (nread == 0) {
+    log("EOF from irc_conn %d", c->fd); return 0;
+  }
   check_for_messages(e, p, nread);
+  return 1;
 }
 
 void irc_conn_init(struct conn* c, const char* host, uint16_t port) {
@@ -113,8 +124,11 @@ void check_for_messages(struct epoll_cont* e, uint32_t p, ssize_t nread) {
 }
 
 int my_connect_sock(const char *host, uint16_t port) {
-  int descriptor = socket(AF_INET, SOCK_STREAM, 0);
-  if (descriptor < 0) die("socket");
+  int fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (fd < 0) {
+    log("socket");
+    return -1;
+  }
 
   struct sockaddr_in sa;
   struct addrinfo *ai = NULL;
@@ -123,19 +137,25 @@ int my_connect_sock(const char *host, uint16_t port) {
 
   hai.ai_family = AF_INET;
   hai.ai_socktype = SOCK_STREAM;
-  int err = getaddrinfo(host, 0, &hai, &ai);
-  if (err != 0) {
-    fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(err));
-    exit(EXIT_FAILURE);
-  };
+  int addr_err = getaddrinfo(host, 0, &hai, &ai);
+  if (addr_err != 0) {
+    log("getaddrinfo: %s", gai_strerror(addr_err));
+    goto err;
+  }
   memcpy(&sa, ai->ai_addr, sizeof(sa));
   sa.sin_port = htons(port);
+
+  if (connect(fd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+    log_errno("connect");
+    goto err;
+  }
   freeaddrinfo(ai);
+  return fd;
 
-  if (connect(descriptor, (struct sockaddr *)&sa, sizeof(sa)) < 0)
-    die("connect");
-
-  return descriptor;
+err:
+  close(fd);
+  freeaddrinfo(ai);
+  return -1;
 }
 
 void send_data(int fd, const char *message, ...) {
@@ -144,7 +164,10 @@ void send_data(int fd, const char *message, ...) {
 
   char buf[IRC_MAXLEN];
   int n = vsnprintf(buf, IRC_MAXLEN-3, message, vl);
-  if (n < 0) die2("vsnprintf error");
+  if (n < 0) {
+    log("vsnprintf error");
+    return;
+  }
   va_end(vl);
 
   buf[n] = '\r';
@@ -153,8 +176,11 @@ void send_data(int fd, const char *message, ...) {
   n += 2;
   printf("%s", buf);
   ssize_t nwrote = write(fd, buf, n);
-  if (nwrote < 0) die("write");
-  if (nwrote != n) die2("partial write");
+  if (nwrote < 0) {
+    log_errno("write");
+  } else if (nwrote != n) {
+    log("partial write on %d", fd);
+  }
 }
 
 void mknick(size_t len, char* nick) {

@@ -19,10 +19,8 @@ char buf[BUFSIZE];
 int main(void) {
   char path[UNIX_PATH_MAX];
   size_t len;
-  if (!find_server_addr(path, &len)) {
-    printf("server not running, should start it\n");
-    exit(1);
-  }
+  if (!find_server_addr(path, &len))
+    die2("Server is not running");
 
   int us = socket(AF_UNIX, SOCK_STREAM, 0);
   if (us < 0) die("socket");
@@ -49,7 +47,7 @@ int main(void) {
     int to = ee.data.fd == STDIN_FILENO ? us : STDOUT_FILENO;
     ssize_t nwrote = write(to, buf, nread);
     if (nwrote < 0) die("write");
-    if (nwrote != nread) die2("partial write, exiting");
+    if (nwrote != nread) die2("partial write");
   }
   close(us);
 }

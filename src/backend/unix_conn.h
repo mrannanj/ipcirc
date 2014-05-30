@@ -11,9 +11,7 @@ typedef struct {
 struct event;
 struct epoll_cont;
 
-void unix_conn_read(struct epoll_cont*, uint32_t, struct event*);
-void unix_conn_irc_msg(struct epoll_cont*, uint32_t, struct event*);
-
-int unix_listen_init();
-int unix_listen_accept(int);
-void unix_listen_read(struct epoll_cont*, uint32_t, struct event*);
+void unix_conn_init(struct epoll_cont*, int);
+int unix_conn_read(struct epoll_cont*, uint32_t, struct event*);
+int unix_conn_irc_msg(struct epoll_cont*, uint32_t, struct event*);
+int unix_conn_close(struct epoll_cont*, uint32_t, struct event*);
