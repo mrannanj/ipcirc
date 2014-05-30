@@ -22,7 +22,7 @@ TARGETS := ipc-back ipc-proxy ipc-front
 W := -Wno-unused-parameter -Wall -Wextra
 CFLAGS := -Isrc -D_POSIX_SOURCE -g -pedantic -std=c99 $(W) -Werror
 
-.PHONY: all clean
+.PHONY: all clean install
 
 all: $(TARGETS)
 
@@ -38,6 +38,10 @@ ipc-proxy: $(PROXY_OBJ) $(COMMON_OBJ)
 
 ipc-front: $(FRONT_OBJ) $(COMMON_OBJ)
 	$(CC) $^ -o $@
+
+install: $(TARGETS)
+	mkdir -p $(PREFIX)/bin
+	install -m 0755 $(TARGETS) $(PREFIX)/bin
 
 clean:
 	rm -rf $(OBJ_DIR)
