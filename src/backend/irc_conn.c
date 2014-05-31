@@ -25,16 +25,44 @@ static void send_data(int, const char *, ...);
 static void send_init(int);
 
 static const size_t NICK_LEN = 6;
-static const int ST_INIT = 0;
-static const int ST_FIRST_MSG = 1;
+
+#define ST_INIT 0
+#define ST_AFTER_FIRST 1
 
 int irc_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
+  if (p != ev->source) return 1;
   irc_conn* i = &e->conns[p].data.irc;
   char* msg = ev->p;
   printf("%s", msg);
-  if (i->state == ST_INIT) {
-    i->state = ST_FIRST_MSG;
-    send_init(e->conns[p].fd);
+  int n = 0;
+  ssize_t nwrote = 0;
+  char srv[513];
+  char ret[513];
+
+  switch (i->state) {
+    case ST_INIT:
+      send_init(e->conns[p].fd);
+      i->state = ST_AFTER_FIRST;
+      break;
+    case ST_AFTER_FIRST:
+      n = sscanf(msg, "PING :%s", srv);
+      if (n != 1) break;
+      n = snprintf(ret, sizeof(ret), "PONG :%s\r\n", srv);
+      if (n < 0) {
+        log("snprintf retval %d", n);
+        break;
+      }
+      nwrote = write(e->conns[p].fd, ret, n);
+      if (nwrote < 0) {
+        log_errno("write");
+        return 0;
+      } else if (nwrote != n) {
+        log("partial write");
+        return 0;
+      }
+      break;
+    default:
+      log("unkown state in irc_conn");
   }
   return 1;
 }
@@ -64,11 +92,29 @@ int irc_conn_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
   irc_conn* i = &c->data.irc;
   ssize_t nread = read(c->fd, &i->buf[i->pos], IRC_MAXLEN - i->pos);
   if (nread < 0) {
-    log_errno("read"); return 0;
+    log_errno("read");
+    return 0;
   } else if (nread == 0) {
-    log("EOF from irc_conn %d", c->fd); return 0;
+    log("EOF from irc_conn %d", c->fd);
+    return 0;
   }
   check_for_messages(e, p, nread);
+  return 1;
+}
+
+int irc_conn_close(struct epoll_cont* e, uint32_t p, struct event* ev) {
+  struct conn* c = &e->conns[p];
+  irc_conn* i = &c->data.irc;
+  if (c->fd != -1) {
+    if (epoll_ctl(e->epfd, EPOLL_CTL_DEL, c->fd, NULL) < 0)
+      log_errno("epoll_ctl");
+    if (close(c->fd) < 0)
+      log_errno("close");
+  }
+  if (i->buf) free(i->buf);
+  if (i->last) free(i->last);
+  memset(c, 0, sizeof(*c));
+  c->fd = -1;
   return 1;
 }
 
@@ -77,8 +123,9 @@ void irc_conn_init(struct conn* c, const char* host, uint16_t port) {
   c->cbs[EV_READY_TO_READ] = irc_conn_read;
   c->cbs[EV_IRC_MESSAGE] = irc_conn_irc_msg;
   c->cbs[EV_UNIX_MESSAGE] = irc_conn_unix_msg;
+  c->cbs[EV_CLOSE] = irc_conn_close;
   c->data.irc.pos = 0;
-  c->data.irc.buf = (char*)malloc(IRC_MAXLEN);
+  c->data.irc.buf = malloc(IRC_MAXLEN);
   assert(c->data.irc.buf);
   c->data.irc.last = malloc(IRC_MAXLEN*IRC_NLINES);
   assert(c->data.irc.last);
@@ -92,7 +139,6 @@ void send_init(int fd) {
   send_data(fd, "NICK %s", nick);
   send_data(fd, "USER %s 8 * :%s", user, user);
   send_data(fd, "MODE %s +i", nick);
-  send_data(fd, "JOIN #ipc-irc");
 }
 
 void check_for_messages(struct epoll_cont* e, uint32_t p, ssize_t nread) {

@@ -20,7 +20,7 @@ int main(void) {
   char path[UNIX_PATH_MAX];
   size_t len;
   if (!find_server_addr(path, &len))
-    die2("Server is not running");
+    die2("backend is not running");
 
   int us = socket(AF_UNIX, SOCK_STREAM, 0);
   if (us < 0) die("socket");

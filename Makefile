@@ -17,10 +17,14 @@ COMMON_DIR := $(SRC_DIR)/common
 COMMON_SRC := $(shell find $(COMMON_DIR) -name '*.c')
 COMMON_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(COMMON_SRC))
 
-TARGETS := ipc-back ipc-proxy ipc-front
+TARGETS := iirc iircd iirc-attach
 
 W := -Wno-unused-parameter -Wall -Wextra
-CFLAGS := -Isrc -D_POSIX_SOURCE -g -pedantic -std=c99 $(W) -Werror
+
+CFLAGS := $(shell pkg-config --cflags ncurses)
+CFLAGS += -Isrc -D_POSIX_SOURCE -g -pedantic -std=c99 $(W) -Werror
+
+LDFLAGS := $(shell pkg-config --libs ncurses)
 
 .PHONY: all clean install
 
@@ -30,14 +34,14 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	mkdir -p $(@D)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-ipc-back: $(BACKEND_OBJ) $(COMMON_OBJ)
+iircd: $(BACKEND_OBJ) $(COMMON_OBJ)
 	$(CC) $^ -o $@
 
-ipc-proxy: $(PROXY_OBJ) $(COMMON_OBJ)
+iirc-attach: $(PROXY_OBJ) $(COMMON_OBJ)
 	$(CC) $^ -o $@
 
-ipc-front: $(FRONT_OBJ) $(COMMON_OBJ)
-	$(CC) $^ -o $@
+iirc: $(FRONT_OBJ) $(COMMON_OBJ)
+	$(CC) $^ -o $@ $(LDFLAGS)
 
 install: $(TARGETS)
 	mkdir -p $(PREFIX)/bin

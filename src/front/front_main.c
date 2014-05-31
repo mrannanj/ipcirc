@@ -16,28 +16,30 @@
 #include <sys/wait.h>
 #include <signal.h>
 #include <sys/epoll.h>
+#include <signal.h>
 
 #include "common/common.h"
 
-void usage(char* inv) {
-  printf("usage: %s <hostname>\n", inv);
-  exit(0);
+void handle_sigchld(int sig) {
+  die2("child died");
 }
 
-const char remote_cmd[] = "./ipc-proxy";
+const char cmd[] = "./iirc-attach";
 
 void child(int to[2], int from[2], const char* host) {
   if (dup2(to[0], STDIN_FILENO) < 0) die("dup2");
   if (dup2(from[1], STDOUT_FILENO) < 0) die("dup2");
-  const char cmd[] = "ssh";
-  if (execlp(cmd, cmd, host, remote_cmd, (char*)NULL) < 0) die("execlp");
+  if (host) {
+    if (execlp("ssh", "ssh", host, cmd, (char*)NULL) < 0) die("execlp");
+  } else {
+    if (execlp(cmd, cmd, (char*)NULL) < 0) die("execlp");
+  }
 }
 
 #define MAX_EVENTS 10
 #define BUFSIZE 1024
 
 void parent(int to[2], int from[2]) {
-  (void)to;
   int epfd = epoll_create1(0);
   if (epfd < 0) die("epoll_create1");
   struct epoll_event event = { .events = EPOLLIN, .data.fd = from[0] };
@@ -67,14 +69,12 @@ void parent(int to[2], int from[2]) {
 }
 
 int main(int argc, char** argv) {
-  if (argc < 2) usage(argv[0]);
   int to[2];
   if (pipe(to) < 0) die("pipe");
   int from[2];
   if (pipe(from) < 0) die("pipe");
 
-  signal(SIGCHLD, SIG_IGN);
-  signal(SIGPIPE, SIG_IGN);
+  signal(SIGCHLD, handle_sigchld);
 
   pid_t pid = fork();
   if (pid < 0) die("fork");

@@ -8,7 +8,7 @@
 
 struct epoll_cont {
   int epfd;
-  int nconn;
+  uint32_t nconn;
   struct conn conns[MAX_CONN];
 };
 

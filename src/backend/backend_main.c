@@ -34,6 +34,7 @@ void add_unix_listen(struct epoll_cont* e) {
 void add_irc_conn(struct epoll_cont* e) {
   struct epoll_event ee;
   struct conn* c = &e->conns[e->nconn];
+  //irc_conn_init(c, "irc.cs.hut.fi", 6667);
   irc_conn_init(c, "irc.freenode.net", 6667);
   ee.events = EPOLLIN;
   ee.data.u32 = e->nconn++;

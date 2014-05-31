@@ -1,5 +1,5 @@
 /build
-/ipc-back
-/ipc-proxy
-/ipc-front
+/iircd
+/iirc-attach
+/iirc
 /.ycm_extra_conf.pyc

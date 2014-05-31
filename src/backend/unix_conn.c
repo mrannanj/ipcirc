@@ -64,10 +64,15 @@ int unix_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
 
 int unix_conn_close(struct epoll_cont* e, uint32_t p, struct event* ev) {
   struct conn* c = &e->conns[p];
-  if (close(c->fd) < 0) log_errno("close");
+  if (c->fd != -1) {
+    if (epoll_ctl(e->epfd, EPOLL_CTL_DEL, c->fd, NULL) < 0)
+      log_errno("epoll_ctl");
+    if (close(c->fd) < 0)
+      log_errno("close");
+  }
   if (c->data.unix.buf) free(c->data.unix.buf);
+  memset(c, 0, sizeof(*c));
   c->fd = -1;
-  c->data.unix.buf = NULL;
   return 1;
 }
 
