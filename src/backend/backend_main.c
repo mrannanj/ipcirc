@@ -13,13 +13,12 @@
 #include <time.h>
 #include <assert.h>
 
+#include "backend/irc_conn.h"
 #include "common/common.h"
-#include "irc_conn.h"
-#include "unix_listen.h"
-#include "unix_conn.h"
-#include "conn.h"
-
-#include "epoll_cont.h"
+#include "common/conn.h"
+#include "common/epoll_cont.h"
+#include "common/unix_conn.h"
+#include "common/unix_listen.h"
 
 void add_unix_listen(struct epoll_cont* e) {
   struct epoll_event ee;

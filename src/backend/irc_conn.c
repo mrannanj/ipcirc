@@ -1,6 +1,6 @@
-#include "irc_conn.h"
-#include "conn.h"
-#include "epoll_cont.h"
+#include "backend/irc_conn.h"
+#include "common/conn.h"
+#include "common/epoll_cont.h"
 #include "common/common.h"
 
 #include <netinet/in.h>

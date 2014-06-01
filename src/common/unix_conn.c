@@ -13,9 +13,9 @@
 #include <time.h>
 #include <assert.h>
 
-#include "backend/epoll_cont.h"
-#include "unix_conn.h"
-#include "backend/event.h"
+#include "common/epoll_cont.h"
+#include "common/event.h"
+#include "common/unix_conn.h"
 #include "common/common.h"
 
 static void check_for_messages(struct epoll_cont*, uint32_t, ssize_t);

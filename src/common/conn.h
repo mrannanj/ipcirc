@@ -1,8 +1,8 @@
 #pragma once
 
-#include "event.h"
-#include "irc_conn.h"
-#include "unix_conn.h"
+#include "common/event.h"
+#include "common/unix_conn.h"
+#include "backend/irc_conn.h"
 
 struct epoll_cont;
 
