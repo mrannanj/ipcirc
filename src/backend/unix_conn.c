@@ -13,8 +13,9 @@
 #include <time.h>
 #include <assert.h>
 
-#include "epoll_cont.h"
+#include "backend/epoll_cont.h"
 #include "unix_conn.h"
+#include "backend/event.h"
 #include "common/common.h"
 
 static void check_for_messages(struct epoll_cont*, uint32_t, ssize_t);
@@ -29,8 +30,11 @@ void unix_conn_init(struct epoll_cont* e, int fd) {
   nc->cbs[EV_CLOSE] = unix_conn_close;
   nc->data.unix.pos = 0;
   nc->data.unix.buf = malloc(MSG_MAX+1);
-  struct epoll_event ee = { .events = EPOLLIN, .data.u32 = e->nconn++ };
+  struct epoll_event ee = { .events = EPOLLIN, .data.u32 = e->nconn };
   if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, nc->fd, &ee) < 0) die("epoll_ctl");
+  struct event ev = { .type = EV_UNIX_ACCEPTED, .source = e->nconn };
+  e->nconn += 1;
+  epoll_cont_walk(e, &ev);
 }
 
 int unix_conn_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
@@ -56,7 +60,7 @@ int unix_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
     log_errno("write");
     return 0;
   } else if (len != nwrote) {
-    log("partial write on unic_conn %d", c->fd);
+    log("partial write on unix_conn %d", c->fd);
     return 0;
   }
   return 1;

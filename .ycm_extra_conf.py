@@ -6,6 +6,7 @@ flags = [
   '-Wextra',
   '-Wno-unused',
   '-D_POSIX_SOURCE',
+  '-D_GNU_SOURCE',
   '-std=c99',
   '-Isrc'
 ]

@@ -10,6 +10,7 @@
 #include <stdio.h>
 #include <sys/epoll.h>
 
+#include "backend/unix_conn.h"
 #include "common/common.h"
 
 #define BUFSIZE 4096
@@ -27,8 +28,15 @@ int main(void) {
   struct sockaddr_un sa = { .sun_family = AF_UNIX };
   memcpy(sa.sun_path, path, len);
   sa.sun_path[0] = '\0';
+
+  int on = 1;
+  if (setsockopt(us, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0)
+    die("setsockopt");
   if (connect(us, (struct sockaddr*)&sa, sizeof(sa.sun_family) + len) < 0)
     die("connect");
+
+  if (!unix_conn_verify_cred(us))
+    die2("server has invalid credentials");
 
   int epfd = epoll_create1(0);
   struct epoll_event ee = { .events = EPOLLIN, .data.fd = us };

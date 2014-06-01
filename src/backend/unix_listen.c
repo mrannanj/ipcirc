@@ -1,21 +1,27 @@
 #include "unix_listen.h"
+#include "unix_conn.h"
 #include "epoll_cont.h"
 #include "event.h"
 #include "common/common.h"
 
+#include <unistd.h>
+#include <sys/param.h>
 #include <assert.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 
 static const size_t UNIX_LISTEN_BACKLOG = 10;
 
 int unix_listen_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
   assert(e->nconn < MAX_CONN);
   struct conn* c = &e->conns[p];
-  unix_conn_init(e, unix_listen_accept(c->fd));
+  int client = unix_listen_accept(c->fd);
+  if (client >= 0) unix_conn_init(e, client);
   return 1;
 }
 
@@ -28,6 +34,9 @@ int unix_listen_init() {
   sa.sun_path[0] = '\0';
   if (bind(fd, (struct sockaddr*)&sa, sizeof(sa.sun_family) + path_len) < 0)
     die("bind");
+  int on = 1;
+  if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0)
+    die("setsockopt");
   if (listen(fd, UNIX_LISTEN_BACKLOG) < 0) die("listen");
   return fd;
 }
@@ -36,6 +45,13 @@ int unix_listen_accept(int s) {
   struct sockaddr_un client;
   socklen_t addrlen = sizeof(client);
   int acc = accept(s, (struct sockaddr*)&client, &addrlen);
-  if (acc < 0) die("accept");
+  if (acc < 0) {
+    log_errno("accept");
+    return -1;
+  } else if (!unix_conn_verify_cred(acc)) {
+    log("invalid credentials");
+    close(acc);
+    return -1;
+  }
   return acc;
 }

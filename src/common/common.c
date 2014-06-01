@@ -1,9 +1,13 @@
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <stdarg.h>
-
 #include "common.h"
+
+#include <assert.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 
 #define PROC_NET_UNIX "/proc/net/unix"
 
@@ -56,4 +60,15 @@ int find_server_addr(char* path, size_t* len) {
   }
   fclose(f);
   return found;
+}
+
+int unix_conn_verify_cred(int fd) {
+  struct ucred cr;
+  socklen_t ucred_len = sizeof(struct ucred);
+
+  if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cr, &ucred_len) == -1) {
+    log_errno("getsockopt");
+    return 0;
+  }
+  return cr.uid == getuid();
 }

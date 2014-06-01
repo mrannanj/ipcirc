@@ -33,7 +33,6 @@ int irc_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
   if (p != ev->source) return 1;
   irc_conn* i = &e->conns[p].data.irc;
   char* msg = ev->p;
-  printf("%s", msg);
   int n = 0;
   ssize_t nwrote = 0;
   char srv[513];
@@ -60,9 +59,28 @@ int irc_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
         log("partial write");
         return 0;
       }
-      break;
+      goto out;
     default:
       log("unkown state in irc_conn");
+  }
+  printf("%s", msg);
+  memcpy(i->cbuf[i->cpos], msg, strlen(msg)+1);
+  i->cpos = (i->cpos + 1) % IRC_NLINES;
+  i->cn = (i->cn < IRC_NLINES ? i->cn + 1 : i->cn);
+
+out:
+  return 1;
+}
+
+int irc_conn_unix_acc(struct epoll_cont* e, uint32_t p, struct event* ev) {
+  irc_conn* i = &e->conns[p].data.irc;
+  struct conn* uc = &e->conns[ev->source];
+  int k = IRC_NLINES + i->cpos - i->cn;
+  for (int j = 0; j < i->cn; ++j, k = (k+1) % IRC_NLINES) {
+    ssize_t len = strlen(i->cbuf[k]);
+    ssize_t nwrote = write(uc->fd, i->cbuf[k], len);
+    if (nwrote < 0) log_errno("write");
+    if (nwrote != len) log("partial write");
   }
   return 1;
 }
@@ -112,7 +130,7 @@ int irc_conn_close(struct epoll_cont* e, uint32_t p, struct event* ev) {
       log_errno("close");
   }
   if (i->buf) free(i->buf);
-  if (i->last) free(i->last);
+  if (i->cbuf) free(i->cbuf);
   memset(c, 0, sizeof(*c));
   c->fd = -1;
   return 1;
@@ -123,12 +141,15 @@ void irc_conn_init(struct conn* c, const char* host, uint16_t port) {
   c->cbs[EV_READY_TO_READ] = irc_conn_read;
   c->cbs[EV_IRC_MESSAGE] = irc_conn_irc_msg;
   c->cbs[EV_UNIX_MESSAGE] = irc_conn_unix_msg;
+  c->cbs[EV_UNIX_ACCEPTED] = irc_conn_unix_acc;
   c->cbs[EV_CLOSE] = irc_conn_close;
   c->data.irc.pos = 0;
   c->data.irc.buf = malloc(IRC_MAXLEN);
   assert(c->data.irc.buf);
-  c->data.irc.last = malloc(IRC_MAXLEN*IRC_NLINES);
-  assert(c->data.irc.last);
+  c->data.irc.cbuf = malloc(IRC_MAXLEN*IRC_NLINES);
+  assert(c->data.irc.cbuf);
+  c->data.irc.cpos = 0;
+  c->data.irc.cn = 0;
   c->fd = my_connect_sock(host, port);
 }
 

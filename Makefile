@@ -22,7 +22,8 @@ TARGETS := iirc iircd iirc-attach
 W := -Wno-unused-parameter -Wall -Wextra
 
 CFLAGS := $(shell pkg-config --cflags ncurses)
-CFLAGS += -Isrc -D_POSIX_SOURCE -g -pedantic -std=c99 $(W) -Werror
+CFLAGS += -Isrc -D_POSIX_SOURCE -D_GNU_SOURCE
+CFLAGS += -g -pedantic -std=c99 $(W) -Werror
 
 LDFLAGS := $(shell pkg-config --libs ncurses)
 
