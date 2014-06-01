@@ -35,8 +35,8 @@ void unix_conn_init(struct epoll_cont* e, int fd) {
   nc->cbs[EV_READY_TO_READ] = unix_conn_read;
   nc->cbs[EV_IRC_MESSAGE] = unix_conn_irc_msg;
   nc->cbs[EV_CLOSE] = unix_conn_close;
-  nc->data.unix.pos = 0;
-  nc->data.unix.buf = malloc(MSG_MAX+1);
+  nc->in_pos = 0;
+  nc->in_buf = malloc(CONN_BUFSIZ);
   struct epoll_event ee = { .events = EPOLLIN, .data.u32 = slot };
   if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, nc->fd, &ee) < 0) die("epoll_ctl");
   struct event ev = { .type = EV_UNIX_ACCEPTED, .source = slot };
@@ -45,8 +45,7 @@ void unix_conn_init(struct epoll_cont* e, int fd) {
 
 int unix_conn_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
   struct conn* c = &e->conns[p];
-  unix_conn* uc = &c->data.unix;
-  ssize_t nread = read(c->fd, &uc->buf[uc->pos], MSG_MAX-uc->pos);
+  ssize_t nread = read(c->fd, &c->in_buf[c->in_pos], MSG_MAX-c->in_pos);
   if (nread == 0) {
     log("EOF from unix_conn %d", c->fd);
     return 0;
@@ -81,24 +80,24 @@ int unix_conn_close(struct epoll_cont* e, uint32_t p, struct event* ev) {
     if (close(c->fd) < 0)
       log_errno("close");
   }
-  if (c->data.unix.buf) free(c->data.unix.buf);
+  if (c->in_buf) free(c->in_buf);
   memset(c, 0, sizeof(*c));
   c->fd = -1;
   return 1;
 }
 
 void check_for_messages(struct epoll_cont* e, uint32_t p, ssize_t nread) {
-  unix_conn* uc = &e->conns[p].data.unix;
+  struct conn* c = &e->conns[p];
   char msg[IRC_MAXLEN];
   for (ssize_t k = 0; k < nread;) {
-    char c = uc->buf[uc->pos+k];
-    if (c == '\n') {
-      memcpy(msg, uc->buf, uc->pos+k+1);
-      msg[uc->pos+k+1] = '\0';
+    char x = c->in_buf[c->in_pos + k];
+    if (x == '\n') {
+      memcpy(msg, c->in_buf, c->in_pos+k+1);
+      msg[c->in_pos+k+1] = '\0';
       struct event ev = { .type = EV_UNIX_MESSAGE, .source = p, .p = msg };
       epoll_cont_walk(e, &ev);
-      memmove(uc->buf, &uc->buf[uc->pos+k+1], nread - (k+1));
-      uc->pos = 0;
+      memmove(c->in_buf, &c->in_buf[c->in_pos+k+1], nread - (k+1));
+      c->in_pos = 0;
       nread -= k+1;
       k = 0;
     } else {

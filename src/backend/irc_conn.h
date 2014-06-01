@@ -6,14 +6,12 @@
 #define IRC_NLINES 20
 #define IRC_MAXLEN 513
 
-typedef struct {
-  int state;
-  size_t pos;
-  char* buf;
-  char (*cbuf)[IRC_MAXLEN];
+struct irc_data {
+  int st;
+  char cbuf[IRC_NLINES][IRC_MAXLEN];
   int cpos;
   int cn;
-} irc_conn;
+};
 
 struct conn;
 struct event;

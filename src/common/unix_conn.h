@@ -3,11 +3,6 @@
 #include <stdint.h>
 #include <stddef.h>
 
-typedef struct {
-  size_t pos;
-  char* buf;
-} unix_conn;
-
 struct event;
 struct epoll_cont;
 
