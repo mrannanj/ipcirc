@@ -55,6 +55,7 @@ int unix_conn_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
 int unix_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
   struct conn* c = &e->conns[p];
   ssize_t len = strlen(ev->p);
+  if (strncmp(ev->p, "PONG", 4) == 0) return 1;
   ssize_t nwrote = write(c->fd, ev->p, len);
   if (nwrote < 0) {
     log_errno("write");

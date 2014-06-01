@@ -24,7 +24,7 @@ void handle_sigchld(int sig) {
   die2("child died");
 }
 
-const char cmd[] = "./iirc-attach";
+const char cmd[] = "iirc-attach";
 
 void child(int to[2], int from[2], const char* host) {
   if (dup2(to[0], STDIN_FILENO) < 0) die("dup2");
