@@ -23,21 +23,25 @@
 
 void add_unix_listen(struct epoll_cont* e) {
   struct epoll_event ee;
-  struct conn* c = &e->conns[e->nconn];
+  int slot = epoll_cont_find_free(e);
+  if (slot < 0) die2("no slot for listening to unix connections");
+  struct conn* c = &e->conns[slot];
   c->fd = unix_listen_init();
   c->cbs[EV_READY_TO_READ] = unix_listen_read;
   ee.events = EPOLLIN;
-  ee.data.u32 = e->nconn++;
+  ee.data.u32 = slot;
   if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, c->fd, &ee) < 0) die("epoll_ctl");
 }
 
 void add_irc_conn(struct epoll_cont* e) {
   struct epoll_event ee;
-  struct conn* c = &e->conns[e->nconn];
+  int slot = epoll_cont_find_free(e);
+  if (slot < 0) die2("no slot for irc connection");
+  struct conn* c = &e->conns[slot];
   //irc_conn_init(c, "irc.cs.hut.fi", 6667);
   irc_conn_init(c, "irc.freenode.net", 6667);
   ee.events = EPOLLIN;
-  ee.data.u32 = e->nconn++;
+  ee.data.u32 = slot;
   if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, c->fd, &ee) < 0) die("epoll_ctl");
 }
 

@@ -13,7 +13,6 @@ static void epoll_close_conn(struct epoll_cont*, uint32_t);
 
 void epoll_cont_init(struct epoll_cont* e) {
   e->epfd = epoll_create1(0);
-  e->nconn = 0;
   if (e->epfd < 0) die("epoll_create1");
   memset(e->conns, 0, sizeof(struct conn) * MAX_CONN);
   for (size_t i = 0; i < MAX_CONN; ++i) e->conns[i].fd = -1;
@@ -57,4 +56,11 @@ void epoll_close_conn(struct epoll_cont* e, uint32_t p) {
   } else {
     log("conn %d does not have cleanup cb");
   }
+}
+
+int epoll_cont_find_free(struct epoll_cont* e) {
+  for (int p = 0; p < MAX_CONN; ++p)
+    if (e->conns[p].fd == -1)
+      return p;
+  return -1;
 }

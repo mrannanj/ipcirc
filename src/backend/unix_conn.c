@@ -23,17 +23,23 @@ static void check_for_messages(struct epoll_cont*, uint32_t, ssize_t);
 static const size_t MSG_MAX = 512;
 
 void unix_conn_init(struct epoll_cont* e, int fd) {
-  struct conn* nc = &e->conns[e->nconn];
+  int slot = epoll_cont_find_free(e);
+  if (slot < 0) {
+    log("connection slots used, not accepting unix connection %d", fd);
+    close(fd);
+    return;
+  }
+
+  struct conn* nc = &e->conns[slot];
   nc->fd = fd;
   nc->cbs[EV_READY_TO_READ] = unix_conn_read;
   nc->cbs[EV_IRC_MESSAGE] = unix_conn_irc_msg;
   nc->cbs[EV_CLOSE] = unix_conn_close;
   nc->data.unix.pos = 0;
   nc->data.unix.buf = malloc(MSG_MAX+1);
-  struct epoll_event ee = { .events = EPOLLIN, .data.u32 = e->nconn };
+  struct epoll_event ee = { .events = EPOLLIN, .data.u32 = slot };
   if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, nc->fd, &ee) < 0) die("epoll_ctl");
-  struct event ev = { .type = EV_UNIX_ACCEPTED, .source = e->nconn };
-  e->nconn += 1;
+  struct event ev = { .type = EV_UNIX_ACCEPTED, .source = slot };
   epoll_cont_walk(e, &ev);
 }
 

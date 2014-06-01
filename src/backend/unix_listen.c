@@ -18,7 +18,6 @@
 static const size_t UNIX_LISTEN_BACKLOG = 10;
 
 int unix_listen_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  assert(e->nconn < MAX_CONN);
   struct conn* c = &e->conns[p];
   int client = unix_listen_accept(c->fd);
   if (client >= 0) unix_conn_init(e, client);
