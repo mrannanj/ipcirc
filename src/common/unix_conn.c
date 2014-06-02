@@ -17,91 +17,51 @@
 #include "common/event.h"
 #include "common/unix_conn.h"
 #include "common/common.h"
+#include "common/conn.h"
 
-static void check_for_messages(struct epoll_cont*, uint32_t, ssize_t);
-
-static const size_t MSG_MAX = 512;
-
-void unix_conn_init(struct epoll_cont* e, int fd) {
-  int slot = epoll_cont_find_free(e);
+int unix_conn_init(struct epoll_cont* e, int rfd) {
+  int wfd = dup(rfd);
+  int slot = conn_init(e, rfd, wfd);
   if (slot < 0) {
-    log("connection slots used, not accepting unix connection %d", fd);
-    close(fd);
-    return;
+    log("connection slots used, not accepting unix connection %d", rfd);
+    close(rfd);
+    close(wfd);
+    return -1;
   }
-
-  struct conn* nc = &e->conns[slot];
-  nc->fd = fd;
-  nc->cbs[EV_READY_TO_READ] = unix_conn_read;
-  nc->cbs[EV_IRC_MESSAGE] = unix_conn_irc_msg;
-  nc->cbs[EV_CLOSE] = unix_conn_close;
-  nc->in_pos = 0;
-  nc->in_buf = malloc(CONN_BUFSIZ);
-  struct epoll_event ee = { .events = EPOLLIN, .data.u32 = slot };
-  if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, nc->fd, &ee) < 0) die("epoll_ctl");
-  struct event ev = { .type = EV_UNIX_ACCEPTED, .source = slot };
-  epoll_cont_walk(e, &ev);
-}
-
-int unix_conn_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  struct conn* c = &e->conns[p];
-  ssize_t nread = read(c->fd, &c->in_buf[c->in_pos], MSG_MAX-c->in_pos);
-  if (nread == 0) {
-    log("EOF from unix_conn %d", c->fd);
-    return 0;
-  } else if (nread < 0) {
-    log_errno("read");
-    return 0;
-  }
-  check_for_messages(e, p, nread);
-  return 1;
+  struct conn* c = &e->conns[slot];
+  c->cbs[EV_READ] = conn_read;
+  c->cbs[EV_WRITE] = conn_write;
+  c->cbs[EV_AFTER_READ] = unix_conn_after_read;
+  c->cbs[EV1_IRC_MESSAGE] = unix_conn_irc_msg;
+  c->cbs[EV_CLOSE] = conn_close;
+  return slot;
 }
 
 int unix_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  struct conn* c = &e->conns[p];
-  ssize_t len = strlen(ev->p);
-  if (strncmp(ev->p, "PONG", 4) == 0) return 1;
-  ssize_t nwrote = write(c->fd, ev->p, len);
-  if (nwrote < 0) {
-    log_errno("write");
-    return 0;
-  } else if (len != nwrote) {
-    log("partial write on unix_conn %d", c->fd);
-    return 0;
-  }
+  if (strncmp(ev->p, "PING", 4) == 0) return 1;
+  conn_write_buf2(e, p, ev->p, strlen(ev->p));
   return 1;
 }
 
-int unix_conn_close(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  struct conn* c = &e->conns[p];
-  if (c->fd != -1) {
-    if (epoll_ctl(e->epfd, EPOLL_CTL_DEL, c->fd, NULL) < 0)
-      log_errno("epoll_ctl");
-    if (close(c->fd) < 0)
-      log_errno("close");
-  }
-  if (c->in_buf) free(c->in_buf);
-  memset(c, 0, sizeof(*c));
-  c->fd = -1;
-  return 1;
-}
-
-void check_for_messages(struct epoll_cont* e, uint32_t p, ssize_t nread) {
+int unix_conn_after_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
   struct conn* c = &e->conns[p];
   char msg[IRC_MAXLEN];
-  for (ssize_t k = 0; k < nread;) {
-    char x = c->in_buf[c->in_pos + k];
-    if (x == '\n') {
-      memcpy(msg, c->in_buf, c->in_pos+k+1);
-      msg[c->in_pos+k+1] = '\0';
-      struct event ev = { .type = EV_UNIX_MESSAGE, .source = p, .p = msg };
-      epoll_cont_walk(e, &ev);
-      memmove(c->in_buf, &c->in_buf[c->in_pos+k+1], nread - (k+1));
-      c->in_pos = 0;
-      nread -= k+1;
-      k = 0;
-    } else {
-      ++k;
+  for (ssize_t i = 0; i < c->in_pos;) {
+    const char x = c->in_buf[i];
+    switch (x) {
+      case '\n':
+        memcpy(msg, c->in_buf, i+1);
+        msg[i+1] = '\0';
+        struct event evt = { .type = EV1_UNIX_MESSAGE, .source = p, .p = msg };
+        epoll_cont_walk(e, &evt);
+        c->in_pos -= i+1;
+        memmove(c->in_buf, &c->in_buf[i+1], c->in_pos);
+        i = 0;
+        break;
+      default:
+        ++i;
+        break;
     }
   }
+  return 1;
 }
