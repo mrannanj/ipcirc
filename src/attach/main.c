@@ -39,7 +39,7 @@ int add_unix_conn(struct epoll_cont* e) {
   int slot = unix_conn_init(e, us);
   if (slot < 0) die2("creating unix connection failed");
   struct conn* c = &e->conns[slot];
-  c->cbs[EV_CLOSE] = conn_close;
+  c->cbs[EV_CLOSE] = conn_close_fatal;
   c->cbs[EV_AFTER_READ] = conn_write_to_slot;
   c->cbs[EV_READ] = conn_read;
   c->cbs[EV_WRITE] = conn_write;
@@ -51,6 +51,7 @@ int add_stdio(struct epoll_cont* e) {
   if (slot < 0) die2("failed to add stdin");
   struct conn* c = &e->conns[slot];
   c->cbs[EV_AFTER_READ] = conn_write_to_slot;
+  c->cbs[EV_CLOSE] = conn_close_fatal;
   return slot;
 }
 

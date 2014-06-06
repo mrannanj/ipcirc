@@ -72,3 +72,11 @@ int unix_conn_verify_cred(int fd) {
   }
   return cr.uid == getuid();
 }
+
+int min(int a, int b) {
+  return a < b ? a : b;
+}
+
+int max(int a, int b) {
+  return a > b ? a : b;
+}

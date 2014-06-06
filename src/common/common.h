@@ -19,4 +19,7 @@ void die2_(const char*, const char*, const char*, int);
 
 int find_server_addr(char*, size_t*);
 
+int min(int,int);
+int max(int,int);
+
 int unix_conn_verify_cred(int);

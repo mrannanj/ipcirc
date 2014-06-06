@@ -13,9 +13,16 @@ CLIENT_DIR := $(SRC_DIR)/client
 CLIENT_SRC := $(shell find $(CLIENT_DIR) -name '*.c')
 CLIENT_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(CLIENT_SRC))
 
+PROTO_SRC := $(SRC_DIR)/common/iirc.pb-c.c
+PROTO_OBJ := $(OBJ_DIR)/common/iirc.pb-c.o
+
 COMMON_DIR := $(SRC_DIR)/common
-COMMON_SRC := $(shell find $(COMMON_DIR) -name '*.c')
+COMMON_SRC := $(PROTO_SRC)
+COMMON_SRC += $(shell find $(COMMON_DIR) -name '*.c')
 COMMON_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(COMMON_SRC))
+
+DEPS := $(COMMON_OBJ:.o=.d) $(DAEMON_OBJ:.o=.d) $(ATTACH_OBJ:.o=.d)
+DEPS += $(CLIENT_OBJ:.o=.d)
 
 TARGETS := iirc iircd iirc-attach
 
@@ -25,21 +32,27 @@ CFLAGS := $(shell pkg-config --cflags ncurses)
 CFLAGS += -Isrc -D_POSIX_SOURCE -D_GNU_SOURCE
 CFLAGS += -g -pedantic -std=c99 $(W) -Werror
 
-LDFLAGS := $(shell pkg-config --libs ncurses)
+LDFLAGS := $(shell pkg-config --libs ncurses) -lprotobuf-c
 
 .PHONY: all clean install
 
 all: $(TARGETS)
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+.SECONDARY:
+$(SRC_DIR)/%.pb-c.h $(SRC_DIR)/%.pb-c.c: $(SRC_DIR)/%.proto
+	@echo "PROCOC $@ <- $<"
+	@cd src; \
+	 protoc-c --c_out=./ common/iirc.proto
+
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(PROTO_SRC)
 	mkdir -p $(@D)
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(W) -MMD -MP -c $< -o $@
 
 iircd: $(DAEMON_OBJ) $(COMMON_OBJ)
-	$(CC) $^ -o $@
+	$(CC) $^ -o $@ $(LDFLAGS)
 
 iirc-attach: $(ATTACH_OBJ) $(COMMON_OBJ)
-	$(CC) $^ -o $@
+	$(CC) $^ -o $@ $(LDFLAGS)
 
 iirc: $(CLIENT_OBJ) $(COMMON_OBJ)
 	$(CC) $^ -o $@ $(LDFLAGS)
@@ -51,3 +64,8 @@ install: $(TARGETS)
 clean:
 	rm -rf $(OBJ_DIR)
 	rm -rf $(TARGETS)
+	rm -rf src/common/iirc.pb-c.c src/common/iirc.pb-c.h
+
+ifneq ($(MAKECMDGOALS), clean)
+-include $(DEPS)
+endif

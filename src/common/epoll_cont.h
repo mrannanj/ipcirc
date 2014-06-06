@@ -7,7 +7,9 @@
 
 struct epoll_cont {
   int epfd;
+  int cont;
   struct conn conns[MAX_CONN];
+  void* ptr;
 };
 
 void epoll_cont_init(struct epoll_cont*);

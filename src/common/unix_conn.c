@@ -16,6 +16,7 @@
 #include "common/epoll_cont.h"
 #include "common/event.h"
 #include "common/unix_conn.h"
+#include "common/irc_conn.h"
 #include "common/common.h"
 #include "common/conn.h"
 
@@ -39,7 +40,9 @@ int unix_conn_init(struct epoll_cont* e, int rfd) {
 
 int unix_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
   if (strncmp(ev->p, "PING", 4) == 0) return 1;
-  conn_write_buf2(e, p, ev->p, strlen(ev->p));
+  uint8_t buf[2048];
+  size_t total_len = irc_conn_pack_row(buf, ev->p);
+  conn_write_buf2(e, p, (char*)buf, total_len);
   return 1;
 }
 

@@ -21,14 +21,12 @@
 #include "common/unix_listen.h"
 
 void add_unix_listen(struct epoll_cont* e) {
-  struct epoll_event ee;
   int slot = epoll_cont_find_free(e);
   if (slot < 0) die2("no slot for listening to unix connections");
   struct conn* c = &e->conns[slot];
   c->rfd = unix_listen_init();
   c->cbs[EV_READ] = unix_listen_read;
-  ee.events = EPOLLIN;
-  ee.data.u32 = slot;
+  struct epoll_event ee = { .events = EPOLLIN, .data.u32 = slot };
   if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, c->rfd, &ee) < 0) die("epoll_ctl");
 }
 

@@ -2,6 +2,7 @@
 #include "common/irc_conn.h"
 #include "common/common.h"
 #include "common/conn.h"
+#include "common/iirc.pb-c.h"
 
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -54,12 +55,29 @@ out:
   return 1;
 }
 
+size_t irc_conn_pack_row(uint8_t* buf, char* s) {
+  Row row;
+  row__init(&row);
+  row.timestamp = time(NULL);
+  row.text = s;
+  AMessage amessage;
+  amessage__init(&amessage);
+  amessage.type = MESSAGE_TYPE__ROW;
+  amessage.row = &row;
+  uint16_t len = amessage__get_packed_size(&amessage);
+  uint16_t nlen = htons(len);
+  memcpy(buf, &nlen, sizeof(nlen));
+  amessage__pack(&amessage, &buf[sizeof(nlen)]);
+  return len + sizeof(nlen);
+}
+
 int irc_conn_unix_acc(struct epoll_cont* e, uint32_t p, struct event* ev) {
   struct irc_data* irc = e->conns[p].data.ptr;
   int k = IRC_NLINES + irc->cpos - irc->cn;
   for (int j = 0; j < irc->cn; ++j, k = (k+1) % IRC_NLINES) {
-    ssize_t len = strlen(irc->cbuf[k]);
-    conn_write_buf2(e, ev->source, irc->cbuf[k], len);
+    uint8_t buf[2048];
+    size_t total_len = irc_conn_pack_row(buf, irc->cbuf[k]);
+    conn_write_buf2(e, ev->source, (char*)buf, total_len);
   }
   return 1;
 }

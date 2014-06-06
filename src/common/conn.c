@@ -35,6 +35,11 @@ int conn_init(struct epoll_cont* e, int rfd, int wfd) {
   return slot;
 }
 
+int conn_close_fatal(struct epoll_cont* e, uint32_t slot, struct event* ev) {
+  conn_close(e,slot,ev);
+  return 0;
+}
+
 int conn_close(struct epoll_cont* e, uint32_t slot, struct event* ev) {
   struct conn* c = &e->conns[slot];
   if (c->rfd != -1) {

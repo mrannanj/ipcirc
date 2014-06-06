@@ -1,0 +1,13 @@
+enum MessageType {
+  ROW = 1;
+}
+
+message AMessage {
+  required MessageType type = 1;
+  optional Row row = 2;
+}
+
+message Row {
+  required fixed32 timestamp = 1;
+  required string text = 2;
+}

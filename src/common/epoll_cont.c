@@ -12,16 +12,17 @@
 static void epoll_close_conn(struct epoll_cont*, uint32_t);
 
 void epoll_cont_init(struct epoll_cont* e) {
-  e->epfd = epoll_create1(0);
+  memset(e, 0, sizeof(*e));
+  e->cont = 1;
+  e->epfd = epoll_create1(EPOLL_CLOEXEC);
   if (e->epfd < 0) die("epoll_create1");
-  memset(e->conns, 0, sizeof(struct conn) * MAX_CONN);
   for (int i = 0; i < MAX_CONN; ++i) e->conns[i].rfd = -1;
 }
 
 void epoll_cont_serve(struct epoll_cont* e) {
   struct epoll_event es[MAX_EVENTS];
 
-  for (;;) {
+  while (e->cont) {
     int nfd = epoll_wait(e->epfd, es, MAX_EVENTS, -1);
     if (nfd < 0) die("epoll_wait");
     for (int i = 0; i < nfd; ++i) {
@@ -60,7 +61,7 @@ void epoll_close_conn(struct epoll_cont* e, uint32_t p) {
   assert(p < MAX_CONN);
   event_cb cb = e->conns[p].cbs[EV_CLOSE];
   if (cb) {
-    cb(e, p, NULL);
+    e->cont = cb(e, p, NULL);
   } else {
     log("conn %d does not have cleanup cb");
   }

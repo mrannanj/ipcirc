@@ -2,12 +2,10 @@
 
 #include <unistd.h>
 
+#include "common/conf.h"
 #include "common/event.h"
 #include "common/unix_conn.h"
 #include "common/tcp_conn.h"
-
-#define CONN_BUFSIZ 65536
-#define IRC_MAXLEN 513
 
 #define EV_CLOSE 0
 #define EV_READ 1
@@ -42,6 +40,7 @@ struct conn {
 
 int conn_init(struct epoll_cont*, int, int);
 int conn_close(struct epoll_cont*, uint32_t, struct event*);
+int conn_close_fatal(struct epoll_cont*, uint32_t, struct event*);
 int conn_read(struct epoll_cont*, uint32_t, struct event*);
 int conn_write(struct epoll_cont*, uint32_t, struct event*);
 int conn_write_to_slot(struct epoll_cont*, uint32_t, struct event*);
