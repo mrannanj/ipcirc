@@ -44,15 +44,14 @@ int attach_conn_close(struct epoll_cont* e, uint32_t p, struct event* ev) {
 
 void attach_conn_exec(const char* host, int to[2], int from[2]) {
   const char cmd[] = "iirc-attach";
-  if (close(to[1]) < 0) die("close");
-  if (close(from[0]) < 0) die("close");
-  if (close(STDERR_FILENO)) die("close");
   if (dup2(to[0], STDIN_FILENO) < 0) die("dup2");
   if (dup2(from[1], STDOUT_FILENO) < 0) die("dup2");
   if (host) {
-    if (execlp("ssh", "ssh", host, cmd, (char*)NULL) < 0) die("execlp");
+    if (execlp("ssh", "ssh", host, cmd, (char*)NULL) < 0)
+      die("execlp");
   } else {
-    if (execlp(cmd, cmd, (char*)NULL) < 0) die("execlp");
+    if (execlp("strace", "strace", "-otrace", cmd, (char*)NULL) < 0)
+      die("execlp");
   }
 }
 

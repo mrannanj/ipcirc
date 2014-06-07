@@ -1,5 +1,9 @@
 language: c
 compiler: gcc
+before_install:
+  - sudo apt-get update -qq
+install:
+  - sudo apt-get install protobuf-c-compiler libprotobuf-c0-dev libncurses5-dev -qq
 script: make
 notifications:
   email: false

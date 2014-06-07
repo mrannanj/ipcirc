@@ -10,6 +10,8 @@
 #include <stdio.h>
 #include <sys/epoll.h>
 #include <assert.h>
+#include <signal.h>
+#include <sys/prctl.h>
 
 #include "common/conn.h"
 #include "common/unix_conn.h"

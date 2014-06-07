@@ -32,7 +32,7 @@ CFLAGS := $(shell pkg-config --cflags ncurses)
 CFLAGS += -Isrc -D_POSIX_SOURCE -D_GNU_SOURCE
 CFLAGS += -g -pedantic -std=c99 $(W) -Werror
 
-LDFLAGS := $(shell pkg-config --libs ncurses) -lprotobuf-c
+LDFLAGS := -Wl,-Bstatic -lprotobuf-c -Wl,-Bdynamic $(shell pkg-config --libs ncurses)
 
 .PHONY: all clean install
 

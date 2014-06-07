@@ -21,7 +21,6 @@
 
 static void irc_send(struct epoll_cont*, int, const char *, ...);
 static void irc_send_handshake(struct epoll_cont*, int);
-static void irc_generate_nickname(size_t, char*);
 
 #define ST_INIT 0
 #define ST_AFTER_FIRST 1
@@ -50,7 +49,7 @@ int irc_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
   printf("%s", msg);
   memcpy(irc->cbuf[irc->cpos], msg, strlen(msg)+1);
   irc->cpos = (irc->cpos + 1) % IRC_NLINES;
-  irc->cn = (irc->cn < IRC_NLINES ? irc->cn + 1 : irc->cn);
+  irc->cn = min(IRC_NLINES, irc->cn + 1);
 out:
   return 1;
 }
@@ -167,18 +166,8 @@ void irc_send(struct epoll_cont* e, int slot, const char *message, ...) {
   conn_write_buf2(e, slot, buf, n+1);
 }
 
-void irc_generate_nickname(size_t len, char* nick) {
-  const char pot[] = "abcdefghijklmnopqrstuvwxyz";
-  size_t pot_len = sizeof(pot);
-  nick[0] = 'a';
-  for (size_t i = 1; i < len; ++i)
-    nick[i] = pot[rand()%pot_len];
-  nick[len] = '\0';
-}
-
 void irc_send_handshake(struct epoll_cont* e, int slot) {
-  char nick[7];
-  irc_generate_nickname(sizeof(nick)-1, nick);
+  char nick[] = "iirctest";
   irc_send(e, slot, "NICK %s", nick);
   irc_send(e, slot, "USER %s 8 * :%s", nick, nick);
   irc_send(e, slot, "MODE %s +i", nick);

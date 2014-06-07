@@ -17,6 +17,14 @@ void screen_init(struct screen* s) {
   raw();
   noecho();
 
+  int max_row, max_col;
+  getmaxyx(stdscr, max_row, max_col);
+
+  s->text = newwin(max_row-2, max_col, 0, 0);
+  scrollok(s->text, TRUE);
+  idlok(s->text, TRUE);
+  s->input = newwin(2, max_col, max_row-2, 0);
+
   s->cn = 0;
   s->cpos = 0;
 
@@ -28,19 +36,32 @@ void screen_init(struct screen* s) {
 
 void screen_draw(struct screen* s) {
   erase();
+  werase(s->text);
+  werase(s->input);
+  setsyx(0, 0);
+
   int max_row, max_col;
   getmaxyx(stdscr, max_row, max_col);
-  setsyx(0, 0);
-  screen_draw_buf(s, max_row-2, max_col);
+
+  wresize(s->text, max_row-2, max_col);
+  mvwin(s->text, 0, 0);
+
+  wresize(s->input, 2, max_col);
+  mvwin(s->text, max_row-2, 0);
+
+  screen_draw_buf(s);
+  wrefresh(s->text);
+
   setsyx(max_row-2, 0);
-  screen_status_bar(s, max_row-2, max_col);
+  screen_status_bar(s, max_col);
+
   for (int c = 0; c < max_col && s->line[c]; ++c)
-    addch(s->line[c]);
-  move(max_row-1, s->cursor_pos);
-  refresh();
+    waddch(s->input, s->line[c]);
+  wmove(s->input, 1, s->cursor_pos);
+  wrefresh(s->input);
 }
 
-void screen_status_bar(struct screen* s, int row, int max_col) {
+void screen_status_bar(struct screen* s, int max_col) {
   char status[SCR_NCOL];
   time_t t = time(NULL);
   struct tm local;
@@ -55,12 +76,11 @@ void screen_status_bar(struct screen* s, int row, int max_col) {
   } else if (s->mode == MODE_REPLACE) {
     n = snprintf(status, sizeof(status), "REPLACE");
   } else {
-    die2("invalid mode");
+    die2("invalid mode in screen");
   }
   status[n] = ' ';
-  setsyx(row, 0);
   for (int i = 0; i < max_col; ++i) {
-    addch(status[i]);
+    waddch(s->input, status[i]);
   }
 }
 
@@ -73,28 +93,15 @@ void screen_add_line(struct screen* s, char* row) {
   screen_draw(s);
 }
 
-void screen_draw_buf(struct screen* s, ssize_t row, ssize_t col) {
-  ssize_t i = 0;
-  ssize_t sp = 0;
-  for (ssize_t p = s->cpos; i < row;
-      ++i, p = (IRC_NLINES + p - 1) % IRC_NLINES)
+void screen_draw_buf(struct screen* s) {
+  for (ssize_t i = 0, p = (IRC_NLINES + s->cpos - s->cn) % IRC_NLINES;
+      i < s->cn;
+      ++i, p = (IRC_NLINES + p + 1) % IRC_NLINES)
   {
-    sp += 1 + strlen(s->cbuf[p])/col;
-  }
-  i = 0;
-  for (ssize_t p = (IRC_NLINES + s->cpos - sp) % IRC_NLINES;
-      i < row; ++i, p = (IRC_NLINES + p + 1) % IRC_NLINES)
-  {
-    ssize_t len = strlen(s->cbuf[p]);
-    for (ssize_t j = 0; j < len; ++j) {
-      char c = s->cbuf[p][j];
-      if (isprint(c)) {
-        addch(c);
-      } else {
-        break;
-      }
+    waddch(s->text, '\n');
+    for (ssize_t j = 0; isprint(s->cbuf[p][j]); ++j) {
+      waddch(s->text, s->cbuf[p][j]);
     }
-    addch('\n');
   }
 }
 
@@ -109,6 +116,7 @@ int screen_conn_add(struct epoll_cont* e) {
   struct conn* c = &e->conns[slot];
   memset(c, 0, sizeof(*c));
   c->rfd = STDIN_FILENO;
+  c->wfd = -1;
   c->cbs[EV_READ] = screen_conn_read;
   c->cbs[EV_CLOSE] = conn_close_fatal;
   struct epoll_event ee = { .events = EPOLLIN, .data.u32 = slot };
