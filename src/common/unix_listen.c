@@ -17,16 +17,15 @@
 
 static const size_t UNIX_LISTEN_BACKLOG = 10;
 
-int unix_listen_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  struct conn* c = &e->conns[p];
+int unix_listen_read(struct epoll_cont* e, struct conn* c, struct event* ev) {
   int client = unix_listen_accept(c->rfd);
   if (client < 0) {
     log("didn't accept unix connection");
     return 1;
   }
-  int slot = unix_conn_init(e, client);
-  if (slot >= 0) {
-    struct event evt = { .type = EV1_UNIX_ACCEPTED, .source = slot };
+  struct conn* nc = unix_conn_init(e, client);
+  if (nc) {
+    struct event evt = { .type = EV1_UNIX_ACCEPTED, .source = nc };
     epoll_cont_walk(e, &evt);
   }
   return 1;

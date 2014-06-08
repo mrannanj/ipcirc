@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
   epoll_cont_init(&e);
   e.ptr = &scr;
 
-  scr.attach_slot = attach_conn_add(&e, argv[1]);
+  scr.attach_conn = attach_conn_add(&e, argv[1]);
   screen_conn_add(&e);
 
   epoll_cont_serve(&e);

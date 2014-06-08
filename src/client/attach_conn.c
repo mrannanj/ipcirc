@@ -10,8 +10,8 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 
-int attach_conn_add(struct epoll_cont* e, const char* hn) {
-  int slot = -1;
+struct conn* attach_conn_add(struct epoll_cont* e, const char* hn) {
+  struct conn* c = NULL;
   int to[2];
   int from[2];
   if (pipe(to) < 0) die("pipe");
@@ -24,21 +24,20 @@ int attach_conn_add(struct epoll_cont* e, const char* hn) {
   } else {
     if (close(to[0]) < 0) die("close");
     if (close(from[1]) < 0) die("close");
-    slot = epoll_cont_add(e, from[0], to[1]);
-    if (slot < 0) die2("no connection slot for child pipe");
-    struct conn* c = &e->conns[slot];
+    c = epoll_cont_add(e, from[0], to[1]);
+    if (!c) die2("no connection slot for child pipe");
     c->cbs[EV_WRITE] = conn_write;
     c->cbs[EV_READ] = conn_read;
     c->cbs[EV_AFTER_READ] = attach_conn_after_read;
     c->cbs[EV_CLOSE] = attach_conn_close;
   }
-  return slot;
+  return c;
 }
 
-int attach_conn_close(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  conn_close(e, p, ev);
+int attach_conn_close(struct epoll_cont* e, struct conn* c, struct event* ev) {
+  conn_close(e, c, ev);
   struct screen* s = e->ptr;
-  if (s) s->attach_slot = -1;
+  if (s) s->attach_conn = NULL;
   return 0;
 }
 
@@ -50,16 +49,15 @@ void attach_conn_exec(const char* host, int to[2], int from[2]) {
     if (execlp("ssh", "ssh", host, cmd, (char*)NULL) < 0)
       die("execlp");
   } else {
-    if (execlp("strace", "strace", "-otrace", cmd, (char*)NULL) < 0)
+    if (execlp(cmd, cmd, (char*)NULL) < 0)
       die("execlp");
   }
 }
 
-int attach_conn_after_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  struct conn* c = &e->conns[p];
-
-  while(1) {
-    if (c->in_pos < (ssize_t)sizeof(uint16_t)) break;
+int attach_conn_after_read(struct epoll_cont* e, struct conn* c,
+    struct event* ev)
+{
+  while(c->in_pos >= (ssize_t)sizeof(uint16_t)) {
     uint16_t len;
     memcpy(&len, c->in_buf, sizeof(uint16_t));
     len = ntohs(len);

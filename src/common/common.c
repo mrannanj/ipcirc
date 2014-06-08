@@ -62,17 +62,6 @@ int find_server_addr(char* path, size_t* len) {
   return found;
 }
 
-int unix_conn_verify_cred(int fd) {
-  struct ucred cr;
-  socklen_t ucred_len = sizeof(struct ucred);
-
-  if (getsockopt(fd, SOL_SOCKET, SO_PEERCRED, &cr, &ucred_len) == -1) {
-    log_errno("getsockopt");
-    return 0;
-  }
-  return cr.uid == getuid();
-}
-
 int min(int a, int b) {
   return a < b ? a : b;
 }

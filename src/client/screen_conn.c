@@ -31,7 +31,7 @@ void screen_init(struct screen* s) {
   s->cursor_pos = 0;
   s->line_len = 0;
   s->mode = MODE_NORMAL;
-  s->attach_slot = -1;
+  s->attach_conn = NULL;
 }
 
 void screen_draw(struct screen* s) {
@@ -110,36 +110,35 @@ void screen_destroy(struct screen* s) {
   endwin();
 }
 
-int screen_conn_add(struct epoll_cont* e) {
-  int slot = epoll_cont_find_free(e);
-  if (slot < 0) die2("no connection slot for stdin");
-  struct conn* c = &e->conns[slot];
+struct conn* screen_conn_add(struct epoll_cont* e) {
+  struct conn* c = epoll_cont_find_free(e);
+  if (!c) die2("no connection slot for stdin");
   memset(c, 0, sizeof(*c));
   c->rfd = STDIN_FILENO;
   c->wfd = -1;
   c->cbs[EV_READ] = screen_conn_read;
   c->cbs[EV_CLOSE] = conn_close_fatal;
-  struct epoll_event ee = { .events = EPOLLIN, .data.u32 = slot };
+  struct epoll_event ee = { .events = EPOLLIN, .data.ptr = c };
   if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, c->rfd, &ee) < 0)
     die("epoll_ctl");
-  return slot;
+  return c;
 }
 
-void screen_conn_push_line(struct epoll_cont* e, uint32_t p) {
+void screen_conn_push_line(struct epoll_cont* e, struct conn* c) {
   struct screen* s = e->ptr;
   char* line = s->line;
-  if (s->attach_slot != -1) {
+  if (s->attach_conn != NULL) {
     line[s->line_len] = '\n';
     line[s->line_len+1] = '\0';
-    conn_write_buf2(e, s->attach_slot, line, s->line_len+1);
+    conn_write_buf2(e, s->attach_conn, line, s->line_len+1);
   }
   s->cursor_pos = s->line_len = 0;
   memset(s->line, 0, SCR_NCOL);
 }
 
-int screen_conn_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  char c;
-  ssize_t nread = read(e->conns[p].rfd, &c, 1);
+int screen_conn_read(struct epoll_cont* e, struct conn* c, struct event* ev) {
+  char ch;
+  ssize_t nread = read(c->rfd, &ch, 1);
   if (nread < 0) {
     log_errno("read");
     return 0;
@@ -152,32 +151,32 @@ int screen_conn_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
 
   int cont = 1;
   if (s->mode == MODE_REPLACE) {
-    if (isprint(c)) {
-      s->line[s->cursor_pos] = c;
+    if (isprint(ch)) {
+      s->line[s->cursor_pos] = ch;
       s->cursor_pos = min(s->cursor_pos + 1, SCR_NCOL - 1);
       s->line_len = max(s->cursor_pos, s->line_len);
-    } else if (c == ASCII_ESC) {
+    } else if (ch == ASCII_ESC) {
       s->mode = MODE_NORMAL;
     }
   } else if (s->mode == MODE_INSERT) {
-    if (isprint(c)) {
+    if (isprint(ch)) {
       s->line_len = min(s->line_len + 1, SCR_NCOL - 1);
       if (s->cursor_pos < s->line_len) {
         memmove(&s->line[s->cursor_pos+1], &s->line[s->cursor_pos],
             s->line_len-(s->cursor_pos+1));
       }
-      s->line[s->cursor_pos] = c;
+      s->line[s->cursor_pos] = ch;
       s->cursor_pos = min(s->cursor_pos + 1, s->line_len);
-    } else if (c == ASCII_ESC) {
+    } else if (ch == ASCII_ESC) {
       s->cursor_pos = max(0, s->cursor_pos - 1);
       s->mode = MODE_NORMAL;
-    } else if (c == '\r') {
-      screen_conn_push_line(e, p);
+    } else if (ch == '\r') {
+      screen_conn_push_line(e, c);
     }
   } else if (s->mode == MODE_NORMAL) {
-    switch (c) {
+    switch (ch) {
       case '\r':
-        screen_conn_push_line(e, p);
+        screen_conn_push_line(e, c);
         break;
       case 'x':
         if (s->cursor_pos < s->line_len) {

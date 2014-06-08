@@ -19,15 +19,14 @@
 #include <time.h>
 #include <assert.h>
 
-static void irc_send(struct epoll_cont*, int, const char *, ...);
-static void irc_send_handshake(struct epoll_cont*, int);
+static void irc_send(struct epoll_cont*, struct conn*, const char *, ...);
+static void irc_send_handshake(struct epoll_cont*, struct conn*);
 
 #define ST_INIT 0
 #define ST_AFTER_FIRST 1
 
-int irc_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  if (p != ev->source) return 1;
-  struct conn* c = &e->conns[p];
+int irc_conn_irc_msg(struct epoll_cont* e, struct conn* c, struct event* ev) {
+  if (c != ev->source) return 1;
   struct irc_data* irc = c->data.ptr;
   char* msg = ev->p;
   int n = 0;
@@ -35,13 +34,13 @@ int irc_conn_irc_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
 
   switch (irc->st) {
     case ST_INIT:
-      irc_send_handshake(e, p);
+      irc_send_handshake(e, c);
       irc->st = ST_AFTER_FIRST;
       break;
     case ST_AFTER_FIRST:
       n = sscanf(msg, "PING :%s", server_addr);
       if (n != 1) break;
-      irc_send(e, p, "PONG :%s\r\n", server_addr);
+      irc_send(e, c, "PONG :%s\r\n", server_addr);
       goto out;
     default:
       log("unkown state in irc_conn");
@@ -70,8 +69,9 @@ size_t irc_conn_pack_row(uint8_t* buf, char* s) {
   return len + sizeof(nlen);
 }
 
-int irc_conn_unix_acc(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  struct irc_data* irc = e->conns[p].data.ptr;
+int irc_conn_unix_acc(struct epoll_cont* e, struct conn* c, struct event* ev)
+{
+  struct irc_data* irc = c->data.ptr;
   int k = IRC_NLINES + irc->cpos - irc->cn;
   for (int j = 0; j < irc->cn; ++j, k = (k+1) % IRC_NLINES) {
     uint8_t buf[2048];
@@ -81,7 +81,7 @@ int irc_conn_unix_acc(struct epoll_cont* e, uint32_t p, struct event* ev) {
   return 1;
 }
 
-int irc_conn_unix_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
+int irc_conn_unix_msg(struct epoll_cont* e, struct conn* c, struct event* ev) {
   char buf[IRC_MAXLEN];
   ssize_t len = strlen(ev->p);
   memcpy(buf, ev->p, len);
@@ -89,23 +89,21 @@ int irc_conn_unix_msg(struct epoll_cont* e, uint32_t p, struct event* ev) {
   buf[len] = '\n';
   buf[len+1] = '\0';
   len += 1;
-  conn_write_buf2(e, p, buf, len);
+  conn_write_buf2(e, c, buf, len);
   return 1;
 }
 
-int irc_conn_close(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  struct conn* c = &e->conns[p];
+int irc_conn_close(struct epoll_cont* e, struct conn* c, struct event* ev) {
   if (c->data.ptr) free(c->data.ptr);
-  conn_close(e,p,ev);
+  conn_close(e, c, ev);
   return 1;
 }
 
 void irc_conn_init(struct epoll_cont* e, const char* host, uint16_t port) {
   int rfd = tcp_conn_init(host, port);
   int wfd = dup(rfd);
-  int slot = conn_init(e, rfd, wfd);
-  if (slot < 0) die2("no slot for irc connection");
-  struct conn* c = &e->conns[slot];
+  struct conn* c = conn_init(e, rfd, wfd);
+  if (!c) die2("no slot for irc connection");
   c->data.ptr = malloc(sizeof(struct irc_data));
   assert(c->data.ptr);
   struct irc_data* irc = c->data.ptr;
@@ -121,8 +119,9 @@ void irc_conn_init(struct epoll_cont* e, const char* host, uint16_t port) {
   irc->cn = 0;
 }
 
-int irc_conn_after_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
-  struct conn* c = &e->conns[p];
+int irc_conn_after_read(struct epoll_cont* e, struct conn* c,
+    struct event* ev)
+{
   char prev_ch = '\0';
   char msg[IRC_MAXLEN];
 
@@ -133,7 +132,7 @@ int irc_conn_after_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
         if (x != '\n') break;
         memcpy(msg, c->in_buf, i+1);
         msg[i+1] = '\0';
-        struct event evt = { .type = EV1_IRC_MESSAGE, .source = p, .p = msg };
+        struct event evt = { .type = EV1_IRC_MESSAGE, .source = c, .p = msg };
         epoll_cont_walk(e, &evt);
         c->in_pos -= i+1;
         memmove(c->in_buf, &c->in_buf[i+1], c->in_pos);
@@ -148,7 +147,7 @@ int irc_conn_after_read(struct epoll_cont* e, uint32_t p, struct event* ev) {
   return 1;
 }
 
-void irc_send(struct epoll_cont* e, int slot, const char *message, ...) {
+void irc_send(struct epoll_cont* e, struct conn* c, const char *message, ...) {
   va_list vl;
   va_start(vl, message);
 
@@ -163,12 +162,12 @@ void irc_send(struct epoll_cont* e, int slot, const char *message, ...) {
   buf[n] = '\r';
   buf[n+1] = '\n';
   buf[n+2] = '\0';
-  conn_write_buf2(e, slot, buf, n+1);
+  conn_write_buf2(e, c, buf, n+1);
 }
 
-void irc_send_handshake(struct epoll_cont* e, int slot) {
+void irc_send_handshake(struct epoll_cont* e, struct conn* c) {
   char nick[] = "iirctest";
-  irc_send(e, slot, "NICK %s", nick);
-  irc_send(e, slot, "USER %s 8 * :%s", nick, nick);
-  irc_send(e, slot, "MODE %s +i", nick);
+  irc_send(e, c, "NICK %s", nick);
+  irc_send(e, c, "USER %s 8 * :%s", nick, nick);
+  irc_send(e, c, "MODE %s +i", nick);
 }

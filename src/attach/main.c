@@ -18,7 +18,7 @@
 #include "common/common.h"
 #include "common/epoll_cont.h"
 
-int add_unix_conn(struct epoll_cont* e) {
+struct conn* add_unix_conn(struct epoll_cont* e) {
   char path[UNIX_PATH_MAX];
   size_t len;
   if (!find_server_addr(path, &len))
@@ -38,32 +38,30 @@ int add_unix_conn(struct epoll_cont* e) {
   if (!unix_conn_verify_cred(us))
     die2("server has invalid credentials");
 
-  int slot = unix_conn_init(e, us);
-  if (slot < 0) die2("creating unix connection failed");
-  struct conn* c = &e->conns[slot];
+  struct conn* c = unix_conn_init(e, us);
+  if (!c) die2("creating unix connection failed");
   c->cbs[EV_CLOSE] = conn_close_fatal;
   c->cbs[EV_AFTER_READ] = conn_write_to_slot;
   c->cbs[EV_READ] = conn_read;
   c->cbs[EV_WRITE] = conn_write;
-  return slot;
+  return c;
 }
 
-int add_stdio(struct epoll_cont* e) {
-  int slot = epoll_cont_add(e, STDIN_FILENO, STDOUT_FILENO);
-  if (slot < 0) die2("failed to add stdin");
-  struct conn* c = &e->conns[slot];
+struct conn* add_stdio(struct epoll_cont* e) {
+  struct conn* c = epoll_cont_add(e, STDIN_FILENO, STDOUT_FILENO);
+  if (!c) die2("failed to add stdin");
   c->cbs[EV_AFTER_READ] = conn_write_to_slot;
   c->cbs[EV_CLOSE] = conn_close_fatal;
-  return slot;
+  return c;
 }
 
 int main(void) {
   struct epoll_cont e;
   epoll_cont_init(&e);
-  int s1 = add_unix_conn(&e);
-  int s2 = add_stdio(&e);
-  e.conns[s1].data.u32 = s2;
-  e.conns[s2].data.u32 = s1;
+  struct conn* c1 = add_unix_conn(&e);
+  struct conn* c2 = add_stdio(&e);
+  c1->data.ptr = c2;
+  c2->data.ptr = c1;
   epoll_cont_serve(&e);
   epoll_cont_destroy(&e);
 }

@@ -8,10 +8,9 @@
 #include <assert.h>
 #include <stdio.h>
 
-int conn_init(struct epoll_cont* e, int rfd, int wfd) {
-  int slot = epoll_cont_find_free(e);
-  if (slot < 0) return -1;
-  struct conn* c = &e->conns[slot];
+struct conn* conn_init(struct epoll_cont* e, int rfd, int wfd) {
+  struct conn* c = epoll_cont_find_free(e);
+  if (!c) return NULL;
   memset(c, 0, sizeof(*c));
 
   c->in_pos = 0;
@@ -25,7 +24,7 @@ int conn_init(struct epoll_cont* e, int rfd, int wfd) {
   c->rfd = rfd;
   struct epoll_event ee = {
     .events = EPOLLIN | EPOLLHUP | EPOLLERR,
-    .data.u32 = slot
+    .data.ptr = c
   };
   if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, c->rfd, &ee) < 0)
     die("epoll_ctl");
@@ -35,16 +34,15 @@ int conn_init(struct epoll_cont* e, int rfd, int wfd) {
   if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, c->wfd, &ee) < 0)
     die("epoll_ctl");
 
-  return slot;
+  return c;
 }
 
-int conn_close_fatal(struct epoll_cont* e, uint32_t slot, struct event* ev) {
-  conn_close(e,slot,ev);
+int conn_close_fatal(struct epoll_cont* e, struct conn* c, struct event* ev) {
+  conn_close(e, c, ev);
   return 0;
 }
 
-int conn_close(struct epoll_cont* e, uint32_t slot, struct event* ev) {
-  struct conn* c = &e->conns[slot];
+int conn_close(struct epoll_cont* e, struct conn* c, struct event* ev) {
   if (c->rfd != -1) {
     if (epoll_ctl(e->epfd, EPOLL_CTL_DEL, c->rfd, NULL) < 0)
       log_errno("epoll_ctl");
@@ -64,23 +62,21 @@ int conn_close(struct epoll_cont* e, uint32_t slot, struct event* ev) {
   return 1;
 }
 
-int conn_read(struct epoll_cont* e, uint32_t slot, struct event* ev) {
-  struct conn* c = &e->conns[slot];
+int conn_read(struct epoll_cont* e, struct conn* c, struct event* ev) {
   ssize_t nread = read(c->rfd, &c->in_buf[c->in_pos], CONN_BUFSIZ - c->in_pos);
   if (nread < 0) {
     log_errno("read");
     return 0;
   } else if (nread == 0) {
-    log("EOF from conn %d, fd %d", slot, c->rfd);
+    log("EOF from rfd %d", c->rfd);
     return 0;
   }
   c->in_pos += nread;
-  c->cbs[EV_AFTER_READ](e, slot, NULL);
+  c->cbs[EV_AFTER_READ](e, c, NULL);
   return 1;
 }
 
-int conn_write(struct epoll_cont* e, uint32_t slot, struct event* ev) {
-  struct conn* c = &e->conns[slot];
+int conn_write(struct epoll_cont* e, struct conn* c, struct event* ev) {
   ssize_t nwrote = write(c->wfd, c->out_buf, c->out_pos);
   if (nwrote < 0) {
     log_errno("write");
@@ -90,7 +86,7 @@ int conn_write(struct epoll_cont* e, uint32_t slot, struct event* ev) {
   if (c->out_pos == 0) {
     struct epoll_event ee = {
       .events = EPOLLHUP | EPOLLERR,
-      .data.u32 = slot
+      .data.ptr = c
     };
     epoll_ctl(e->epfd, EPOLL_CTL_MOD, c->wfd, &ee);
   } else {
@@ -99,28 +95,26 @@ int conn_write(struct epoll_cont* e, uint32_t slot, struct event* ev) {
   return 1;
 }
 
-int conn_write_to_slot(struct epoll_cont* e, uint32_t s, struct event* ev) {
-  struct conn* source = &e->conns[s];
-  int target_slot = source->data.u32;
-  assert(target_slot < MAX_CONN);
-  struct conn* target = &e->conns[target_slot];
+int conn_write_to_slot(struct epoll_cont* e, struct conn* c, struct event* ev)
+{
+  struct conn* target = c->data.ptr;
   if (target->rfd == -1) return 0;
-  int r = conn_write_buf2(e, target_slot, source->in_buf, source->in_pos);
-  source->in_pos = 0;
+  int r = conn_write_buf2(e, target, c->in_buf, c->in_pos);
+  c->in_pos = 0;
   return r;
 }
 
-int conn_write_buf2(struct epoll_cont* e, uint32_t s, char* b, ssize_t len) {
-  struct conn* c = &e->conns[s];
+int conn_write_buf2(struct epoll_cont* e, struct conn* c, char* b, ssize_t len)
+{
   if (len > CONN_BUFSIZ - c->out_pos) {
-    log("connection %d, fd %d write buffer full", s, c->wfd);
+    log("wfd %d write buffer full", c->wfd);
     return 0;
   }
   memcpy(&c->out_buf[c->out_pos], b, len);
   c->out_pos += len;
   struct epoll_event ee = {
     .events = EPOLLOUT|EPOLLHUP|EPOLLERR,
-    .data.u32 = s
+    .data.ptr = c
   };
   if (epoll_ctl(e->epfd, EPOLL_CTL_MOD, c->wfd, &ee) < 0) {
     log_errno("epoll_ctl");

@@ -21,7 +21,7 @@
 
 struct epoll_cont;
 
-typedef int (*event_cb)(struct epoll_cont*, uint32_t, struct event*);
+typedef int (*event_cb)(struct epoll_cont*, struct conn*, struct event*);
 
 struct conn {
   int rfd;
@@ -38,10 +38,11 @@ struct conn {
   } data;
 };
 
-int conn_init(struct epoll_cont*, int, int);
-int conn_close(struct epoll_cont*, uint32_t, struct event*);
-int conn_close_fatal(struct epoll_cont*, uint32_t, struct event*);
-int conn_read(struct epoll_cont*, uint32_t, struct event*);
-int conn_write(struct epoll_cont*, uint32_t, struct event*);
-int conn_write_to_slot(struct epoll_cont*, uint32_t, struct event*);
-int conn_write_buf2(struct epoll_cont*, uint32_t, char*, ssize_t);
+struct conn* conn_init(struct epoll_cont*, int, int);
+
+int conn_close(struct epoll_cont*, struct conn*, struct event*);
+int conn_close_fatal(struct epoll_cont*, struct conn*, struct event*);
+int conn_read(struct epoll_cont*, struct conn*, struct event*);
+int conn_write(struct epoll_cont*, struct conn*, struct event*);
+int conn_write_to_slot(struct epoll_cont*, struct conn*, struct event*);
+int conn_write_buf2(struct epoll_cont*, struct conn*, char*, ssize_t);

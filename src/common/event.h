@@ -5,6 +5,6 @@
 
 struct event {
   int type;
-  uint32_t source;
+  struct conn* source;
   void *p;
 };
