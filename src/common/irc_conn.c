@@ -46,18 +46,20 @@ int irc_conn_irc_msg(struct epoll_cont* e, struct conn* c, struct event* ev) {
       log("unkown state in irc_conn");
   }
   printf("%s", msg);
-  memcpy(irc->cbuf[irc->cpos], msg, strlen(msg)+1);
+  memcpy(irc->cbuf[irc->cpos].s, msg, strlen(msg)+1);
+  irc->cbuf[irc->cpos].ts = time(NULL);
+
   irc->cpos = (irc->cpos + 1) % IRC_NLINES;
   irc->cn = min(IRC_NLINES, irc->cn + 1);
 out:
   return 1;
 }
 
-size_t irc_conn_pack_row(uint8_t* buf, char* s) {
+size_t irc_conn_pack_row(uint8_t* buf, struct irc_row* r) {
   Row row;
   row__init(&row);
-  row.timestamp = time(NULL);
-  row.text = s;
+  row.timestamp = r->ts;
+  row.text = r->s;
   AMessage amessage;
   amessage__init(&amessage);
   amessage.type = MESSAGE_TYPE__ROW;
@@ -75,13 +77,14 @@ int irc_conn_unix_acc(struct epoll_cont* e, struct conn* c, struct event* ev)
   int k = IRC_NLINES + irc->cpos - irc->cn;
   for (int j = 0; j < irc->cn; ++j, k = (k+1) % IRC_NLINES) {
     uint8_t buf[2048];
-    size_t total_len = irc_conn_pack_row(buf, irc->cbuf[k]);
+    size_t total_len = irc_conn_pack_row(buf, &irc->cbuf[k]);
     conn_write_buf2(e, ev->source, (char*)buf, total_len);
   }
   return 1;
 }
 
-int irc_conn_unix_msg(struct epoll_cont* e, struct conn* c, struct event* ev) {
+int irc_conn_unix_msg(struct epoll_cont* e, struct conn* c, struct event* ev)
+{
   char buf[IRC_MAXLEN];
   ssize_t len = strlen(ev->p);
   memcpy(buf, ev->p, len);

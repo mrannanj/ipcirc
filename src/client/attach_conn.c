@@ -9,6 +9,9 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 struct conn* attach_conn_add(struct epoll_cont* e, const char* hn) {
   struct conn* c = NULL;
@@ -43,6 +46,9 @@ int attach_conn_close(struct epoll_cont* e, struct conn* c, struct event* ev) {
 
 void attach_conn_exec(const char* host, int to[2], int from[2]) {
   const char cmd[] = "iirc-attach";
+  int null = open("/dev/null", O_WRONLY);
+  if (null < 0) die("open");
+  if (dup2(null, STDERR_FILENO) < 0) die("dup2");
   if (dup2(to[0], STDIN_FILENO) < 0) die("dup2");
   if (dup2(from[1], STDOUT_FILENO) < 0) die("dup2");
   if (host) {
@@ -62,11 +68,11 @@ int attach_conn_after_read(struct epoll_cont* e, struct conn* c,
     memcpy(&len, c->in_buf, sizeof(uint16_t));
     len = ntohs(len);
     if (c->in_pos+sizeof(uint16_t) < len) break;
-    AMessage* amsg = amessage__unpack(NULL, len, (uint8_t*)&c->in_buf[2]);
-    if (amsg && amsg->type == MESSAGE_TYPE__ROW) {
-      screen_add_line(e->ptr, amsg->row->text);
+    AMessage* m = amessage__unpack(NULL, len, (uint8_t*)&c->in_buf[2]);
+    if (m && m->type == MESSAGE_TYPE__ROW) {
+      screen_add_line(e->ptr, m);
     }
-    amessage__free_unpacked(amsg, NULL);
+    amessage__free_unpacked(m, NULL);
     c->in_pos -= len + sizeof(uint16_t);
     memmove(c->in_buf, &c->in_buf[len + sizeof(uint16_t)], c->in_pos);
   }

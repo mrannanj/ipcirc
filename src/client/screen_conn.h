@@ -1,8 +1,10 @@
 #pragma once
 
 #include "common/epoll_cont.h"
+#include "common/iirc.pb-c.h"
 
 #include <ncurses.h>
+#include <time.h>
 
 #define SCR_NROW 512
 #define SCR_NCOL 512
@@ -13,13 +15,18 @@
 
 #define ASCII_ESC 27
 
+struct row {
+  time_t ts;
+  char s[IRC_MAXLEN];
+};
+
 struct screen {
   char line[SCR_NCOL];
   int line_len;
   int cursor_pos;
   int mode;
 
-  char cbuf[IRC_NLINES][IRC_MAXLEN];
+  struct row cbuf[IRC_NLINES];
   int cpos;
   int cn;
 
@@ -34,7 +41,7 @@ int screen_conn_read(struct epoll_cont*, struct conn*, struct event*);
 struct conn* screen_conn_add(struct epoll_cont*);
 
 void screen_init(struct screen*);
-void screen_add_line(struct screen*, char*);
+void screen_add_line(struct screen*, AMessage*);
 void screen_draw(struct screen*);
 void screen_destroy(struct screen*);
 void screen_draw_buf(struct screen*);

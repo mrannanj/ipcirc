@@ -7,6 +7,7 @@
 
 #include "client/screen_conn.h"
 #include "common/common.h"
+#include "common/iirc.pb-c.h"
 #include "common/epoll_cont.h"
 
 void screen_init(struct screen* s) {
@@ -84,23 +85,34 @@ void screen_status_bar(struct screen* s, int max_col) {
   }
 }
 
-void screen_add_line(struct screen* s, char* row) {
-  size_t len = strlen(row);
-  memcpy(s->cbuf[s->cpos], row, len);
-  s->cbuf[s->cpos][len] = '\0';
+void screen_add_line(struct screen* s, AMessage* m) {
+  assert(m->type == MESSAGE_TYPE__ROW);
+
+  size_t len = strlen(m->row->text);
+  memcpy(s->cbuf[s->cpos].s, m->row->text, len);
+  s->cbuf[s->cpos].s[len] = '\0';
+  s->cbuf[s->cpos].ts = m->row->timestamp;
+
   s->cn = min(s->cn + 1, IRC_NLINES);
   s->cpos = (IRC_NLINES + s->cpos + 1) % IRC_NLINES;
   screen_draw(s);
 }
 
 void screen_draw_buf(struct screen* s) {
+  char tbuf[10];
+  char buf[1024];
   for (ssize_t i = 0, p = (IRC_NLINES + s->cpos - s->cn) % IRC_NLINES;
       i < s->cn;
       ++i, p = (IRC_NLINES + p + 1) % IRC_NLINES)
   {
+    time_t t = s->cbuf[p].ts;
+    struct tm local;
+    localtime_r(&t, &local);
+    strftime(tbuf, sizeof(tbuf), "%H:%M:%S ", &local);
+    snprintf(buf, sizeof(buf), "%s%s", tbuf, s->cbuf[p].s);
     waddch(s->text, '\n');
-    for (ssize_t j = 0; isprint(s->cbuf[p][j]); ++j) {
-      waddch(s->text, s->cbuf[p][j]);
+    for (ssize_t j = 0; isprint(buf[j]); ++j) {
+      waddch(s->text, buf[j]);
     }
   }
 }
