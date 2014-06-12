@@ -2,24 +2,28 @@ SRC_DIR := src
 OBJ_DIR := build
 
 DAEMON_DIR := $(SRC_DIR)/daemon
-DAEMON_SRC := $(shell find $(DAEMON_DIR) -name '*.c')
+DAEMON_SRC := $(wildcard $(DAEMON_DIR)/*.c)
 DAEMON_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(DAEMON_SRC))
 
 ATTACH_DIR := $(SRC_DIR)/attach
-ATTACH_SRC := $(shell find $(ATTACH_DIR) -name '*.c')
+ATTACH_SRC := $(wildcard $(ATTACH_DIR)/*.c)
 ATTACH_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(ATTACH_SRC))
 
 CLIENT_DIR := $(SRC_DIR)/client
-CLIENT_SRC := $(shell find $(CLIENT_DIR) -name '*.c')
+CLIENT_SRC := $(wildcard $(CLIENT_DIR)/*.c)
 CLIENT_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(CLIENT_SRC))
 
-PROTO_SRC := $(SRC_DIR)/common/iirc.pb-c.c
-PROTO_OBJ := $(OBJ_DIR)/common/iirc.pb-c.o
+OBJ = $(DAEMON_OBJ) $(ATTACH_OBJ) $(CLIENT_OBJ)
 
 COMMON_DIR := $(SRC_DIR)/common
-COMMON_SRC := $(PROTO_SRC)
-COMMON_SRC += $(shell find $(COMMON_DIR) -name '*.c')
+PROTO_SRC := $(SRC_DIR)/common/iirc.pb-c.c
+COMMON_SRC := $(wildcard $(COMMON_DIR)/*.c)
+ifeq ("$(wildcard $(PROTO_SRC))","")
+	COMMON_SRC += $(PROTO_SRC)
+endif
 COMMON_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(COMMON_SRC))
+
+LIBIIRC := libiirc.so
 
 DEPS := $(COMMON_OBJ:.o=.d) $(DAEMON_OBJ:.o=.d) $(ATTACH_OBJ:.o=.d)
 DEPS += $(CLIENT_OBJ:.o=.d)
@@ -32,10 +36,12 @@ CFLAGS := $(shell pkg-config --cflags ncurses)
 CFLAGS += -Isrc -D_POSIX_SOURCE -D_GNU_SOURCE
 CFLAGS += -g -pedantic -std=c99 $(W) -Werror
 
-LDFLAGS := -Wl,-Bstatic -lprotobuf-c
-LDFLAGS += -Wl,-Bdynamic $(shell pkg-config --libs ncurses)
+LDFLAGS := -lprotobuf-c $(shell pkg-config --libs ncurses)
+LDFLAGS += -Wl,-rpath=\$$ORIGIN:\$$ORIGIN/../lib -L. -liirc
 
-.PHONY: all clean install indent
+.PHONY: all clean libiirc install indent
+
+CUR_SRC = $(patsubst $(OBJ_DIR)/%, $(SRC_DIR)/%.c, $*)
 
 all: $(TARGETS)
 
@@ -45,30 +51,49 @@ $(SRC_DIR)/%.pb-c.h $(SRC_DIR)/%.pb-c.c: $(SRC_DIR)/%.proto
 	@cd src; \
 	 protoc-c --c_out=./ common/iirc.proto
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c $(PROTO_SRC)
-	mkdir -p $(@D)
-	$(CC) $(CFLAGS) $(W) -MMD -MP -c $< -o $@
+$(OBJ): $(DAEMON_SRC) $(ATTACH_SRC) $(COMMON_SRC)
+	@mkdir -p $(@D)
+	@echo CC $@
+	@$(CC) $(CFLAGS) -MMD -MP -c $(CUR_SRC) -o $@
 
-iircd: $(DAEMON_OBJ) $(COMMON_OBJ)
-	$(CC) $^ -o $@ $(LDFLAGS)
+$(LIBIIRC): libiirc($(COMMON_OBJ))
+	@echo LD $@
+	@$(CC) -shared -Wl,-soname,libiirc.so -o $(LIBIIRC) $^
 
-iirc-attach: $(ATTACH_OBJ) $(COMMON_OBJ)
-	$(CC) $^ -o $@ $(LDFLAGS)
+libiirc($(COMMON_OBJ)): $(COMMON_SRC)
+	@mkdir -p $(dir $*)
+	@echo CC $%
+	@$(CC) $(CFLAGS) -fPIC -MMD -MP -c $(CUR_SRC) -o $%
 
-iirc: $(CLIENT_OBJ) $(COMMON_OBJ)
-	$(CC) $^ -o $@ $(LDFLAGS)
+libiirc: $(LIBIIRC)
+
+iircd: $(DAEMON_OBJ) $(LIBIIRC)
+	@echo LD $@
+	@$(CC) $^ -o $@ $(LDFLAGS)
+
+iirc-attach: $(ATTACH_OBJ) $(LIBIIRC)
+	@echo LD $@
+	@$(CC) $^ -o $@ $(LDFLAGS)
+
+iirc: $(CLIENT_OBJ) $(LIBIIRC)
+	@echo LD $@
+	@$(CC) $^ -o $@ $(LDFLAGS)
 
 indent: $(COMMON_SRC) $(CLIENT_SRC) $(ATTACH_SRC) $(DAEMON_SRC)
 	indent -linux $^
 
 install: $(TARGETS)
+	mkdir -p $(PREFIX)/lib
 	mkdir -p $(PREFIX)/bin
+	install -m 0755 $(LIBIIRC) $(PREFIX)/lib
 	install -m 0755 $(TARGETS) $(PREFIX)/bin
 
 clean:
 	rm -rf $(OBJ_DIR)
 	rm -rf $(TARGETS)
-	rm -rf src/common/iirc.pb-c.c src/common/iirc.pb-c.h
+	rm -rf $(LIBIIRC)
+	rm -rf $(SRC_DIR)/common/iirc.pb-c.c
+	rm -rf $(SRC_DIR)/common/iirc.pb-c.h
 
 ifneq ($(MAKECMDGOALS), clean)
 -include $(DEPS)
