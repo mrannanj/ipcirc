@@ -1,8 +1,10 @@
+*.pb-c.c
+*.pb-c.h
+*.c~
+*.h~
+
 /build
 /iircd
 /iirc-attach
 /iirc
 /.ycm_extra_conf.pyc
-
-/src/common/iirc.pb-c.c
-/src/common/iirc.pb-c.h

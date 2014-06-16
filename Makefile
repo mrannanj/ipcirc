@@ -35,7 +35,7 @@ CFLAGS += -g -pedantic -std=c99 $(W) -Werror
 LDFLAGS := -Wl,-Bstatic -lprotobuf-c
 LDFLAGS += -Wl,-Bdynamic $(shell pkg-config --libs ncurses)
 
-.PHONY: all clean install
+.PHONY: all clean install indent
 
 all: $(TARGETS)
 
@@ -57,6 +57,9 @@ iirc-attach: $(ATTACH_OBJ) $(COMMON_OBJ)
 
 iirc: $(CLIENT_OBJ) $(COMMON_OBJ)
 	$(CC) $^ -o $@ $(LDFLAGS)
+
+indent: $(COMMON_SRC) $(CLIENT_SRC) $(ATTACH_SRC) $(DAEMON_SRC)
+	indent -linux $^
 
 install: $(TARGETS)
 	mkdir -p $(PREFIX)/bin
