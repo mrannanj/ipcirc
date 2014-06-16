@@ -16,17 +16,18 @@ CLIENT_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(CLIENT_SRC))
 OBJ = $(DAEMON_OBJ) $(ATTACH_OBJ) $(CLIENT_OBJ)
 
 COMMON_DIR := $(SRC_DIR)/common
-PROTO_SRC := $(SRC_DIR)/common/iirc.pb-c.c
 COMMON_SRC := $(wildcard $(COMMON_DIR)/*.c)
-ifeq ("$(wildcard $(PROTO_SRC))","")
-	COMMON_SRC += $(PROTO_SRC)
-endif
 COMMON_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(COMMON_SRC))
+
+PROTO_DIR := $(SRC_DIR)/proto
+PROTO_DEF := $(wildcard $(PROTO_DIR)/*.proto)
+PROTO_SRC := $(patsubst %.proto, %.pb-c.c, $(PROTO_DEF))
+PROTO_OBJ := $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(PROTO_SRC))
 
 LIBIIRC := libiirc.so
 
-DEPS := $(COMMON_OBJ:.o=.d) $(DAEMON_OBJ:.o=.d) $(ATTACH_OBJ:.o=.d)
-DEPS += $(CLIENT_OBJ:.o=.d)
+DEPS := $(PROTO_OBJ:.o=.d) $(COMMON_OBJ:.o=.d)
+DEPS += $(DAEMON_OBJ:.o=.d) $(ATTACH_OBJ:.o=.d) $(CLIENT_OBJ:.o=.d)
 
 TARGETS := iirc iircd iirc-attach
 
@@ -48,19 +49,19 @@ all: $(TARGETS)
 .SECONDARY:
 $(SRC_DIR)/%.pb-c.h $(SRC_DIR)/%.pb-c.c: $(SRC_DIR)/%.proto
 	@echo "PROCOC $@ <- $<"
-	@cd src; \
-	 protoc-c --c_out=./ common/iirc.proto
+	@cd $(SRC_DIR); \
+	 protoc-c --c_out=./ $(patsubst $(SRC_DIR)/%, %, $<)
 
-$(OBJ): $(DAEMON_SRC) $(ATTACH_SRC) $(COMMON_SRC)
+$(OBJ): $(DAEMON_SRC) $(ATTACH_SRC) $(COMMON_SRC) $(PROTO_SRC)
 	@mkdir -p $(@D)
 	@echo CC $@
 	@$(CC) $(CFLAGS) -MMD -MP -c $(CUR_SRC) -o $@
 
-$(LIBIIRC): libiirc($(COMMON_OBJ))
+$(LIBIIRC): libiirc($(COMMON_OBJ) $(PROTO_OBJ))
 	@echo LD $@
 	@$(CC) -shared -Wl,-soname,libiirc.so -o $(LIBIIRC) $^
 
-libiirc($(COMMON_OBJ)): $(COMMON_SRC)
+libiirc($(COMMON_OBJ) $(PROTO_OBJ)): $(COMMON_SRC) $(PROTO_SRC)
 	@mkdir -p $(dir $*)
 	@echo CC $%
 	@$(CC) $(CFLAGS) -fPIC -MMD -MP -c $(CUR_SRC) -o $%
@@ -92,8 +93,8 @@ clean:
 	rm -rf $(OBJ_DIR)
 	rm -rf $(TARGETS)
 	rm -rf $(LIBIIRC)
-	rm -rf $(SRC_DIR)/common/iirc.pb-c.c
-	rm -rf $(SRC_DIR)/common/iirc.pb-c.h
+	rm -rf $(PROTO_SRC)
+	rm -rf $(patsubst %.c, %.h, $(PROTO_SRC))
 
 ifneq ($(MAKECMDGOALS), clean)
 -include $(DEPS)

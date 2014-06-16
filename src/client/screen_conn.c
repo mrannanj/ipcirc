@@ -7,7 +7,7 @@
 
 #include "client/screen_conn.h"
 #include "common/common.h"
-#include "common/iirc.pb-c.h"
+#include "proto/iirc.pb-c.h"
 #include "common/epoll_cont.h"
 
 void screen_init(struct screen *s)

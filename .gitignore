@@ -4,8 +4,10 @@
 *.h~
 
 /build
+
+/libiirc.so
 /iircd
 /iirc-attach
 /iirc
-/libiirc.so
+
 /.ycm_extra_conf.pyc

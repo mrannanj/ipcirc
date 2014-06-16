@@ -4,7 +4,7 @@
 #include <time.h>
 
 #include "common/epoll_cont.h"
-#include "common/iirc.pb-c.h"
+#include "proto/iirc.pb-c.h"
 
 #define SCR_NROW 512
 #define SCR_NCOL 512

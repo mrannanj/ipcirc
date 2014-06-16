@@ -2,7 +2,7 @@
 #include "common/irc_conn.h"
 #include "common/common.h"
 #include "common/conn.h"
-#include "common/iirc.pb-c.h"
+#include "proto/iirc.pb-c.h"
 
 #include <netinet/in.h>
 #include <sys/socket.h>

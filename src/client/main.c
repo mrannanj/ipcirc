@@ -1,5 +1,5 @@
 #include "common/common.h"
-#include "common/iirc.pb-c.h"
+#include "proto/iirc.pb-c.h"
 #include "common/epoll_cont.h"
 #include "client/attach_conn.h"
 #include "client/screen_conn.h"
