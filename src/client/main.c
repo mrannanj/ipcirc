@@ -7,10 +7,11 @@
 int main(int argc, char **argv)
 {
 	struct screen scr;
+	struct epoll_cont e;
+
 	screen_init(&scr);
 	screen_draw(&scr);
 
-	struct epoll_cont e;
 	epoll_cont_init(&e);
 	e.ptr = &scr;
 

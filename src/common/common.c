@@ -1,5 +1,3 @@
-#include "common.h"
-
 #include <assert.h>
 #include <stdio.h>
 #include <stdarg.h>
@@ -9,19 +7,25 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#include "common.h"
+
 #define PROC_NET_UNIX "/proc/net/unix"
 
 void log_(const char *fn, const char *fun, int ln, ...)
 {
+	va_list args;
 	char buf[1024];
+	char *fmt;
 	int n = snprintf(buf, sizeof(buf), "%s:%d:%s: ", fn, ln, fun);
+
 	if (n < 0)
 		die2("snprintf error");
-	va_list args;
+
 	va_start(args, ln);
-	char *fmt = va_arg(args, char *);
+	fmt = va_arg(args, char *);
 	vsnprintf(&buf[n], sizeof(buf) - n, fmt, args);
 	va_end(args);
+
 	fprintf(stderr, "%s\n", buf);
 }
 
@@ -48,17 +52,21 @@ void die2_(const char *msg, const char *fn, const char *fun, int ln)
 
 int find_server_addr(char *path, size_t * len)
 {
-	FILE *f = fopen(PROC_NET_UNIX, "r");
-	if (!f)
-		die("fopen");
 	char line[512];
 	int found = 0;
+	FILE *f = fopen(PROC_NET_UNIX, "r");
+
+	if (!f)
+		die("fopen");
+
 	fgets(line, sizeof(line), f);
 	while (fgets(line, sizeof(line), f)) {
 		unsigned long int uli;
+		char *s;
+
 		sscanf(line, "%lX: %lX %lX %lX %lX %lX %lX %s",
 		       &uli, &uli, &uli, &uli, &uli, &uli, &uli, path);
-		char *s = strstr(path, UNIX_ADDR_PREFIX);
+		s = strstr(path, UNIX_ADDR_PREFIX);
 		if (s) {
 			found = 1;
 			*len = strlen(path);
@@ -66,6 +74,7 @@ int find_server_addr(char *path, size_t * len)
 		}
 	}
 	fclose(f);
+
 	return found;
 }
 

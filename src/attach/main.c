@@ -22,17 +22,22 @@ struct conn *add_unix_conn(struct epoll_cont *e)
 {
 	char path[UNIX_PATH_MAX];
 	size_t len;
+	int us, on;
+	struct sockaddr_un sa;
+	struct conn *con;
+
 	if (!find_server_addr(path, &len))
 		die2("backend is not running");
 
-	int us = socket(AF_UNIX, SOCK_STREAM, 0);
+	us = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (us < 0)
 		die("socket");
-	struct sockaddr_un sa = {.sun_family = AF_UNIX };
+
+	sa.sun_family = AF_UNIX;
 	memcpy(sa.sun_path, path, len);
 	sa.sun_path[0] = '\0';
 
-	int on = 1;
+	on = 1;
 	if (setsockopt(us, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0)
 		die("setsockopt");
 	if (connect(us, (struct sockaddr *)&sa, sizeof(sa.sun_family) + len) <
@@ -41,24 +46,26 @@ struct conn *add_unix_conn(struct epoll_cont *e)
 	if (!unix_conn_verify_cred(us))
 		die2("server has invalid credentials");
 
-	struct conn *c = unix_conn_init(e, us);
-	if (!c)
+	con = unix_conn_init(e, us);
+	if (!con)
 		die2("creating unix connection failed");
-	c->cbs[EV_CLOSE] = conn_close_fatal;
-	c->cbs[EV_AFTER_READ] = conn_write_to_slot;
-	c->cbs[EV_READ] = conn_read;
-	c->cbs[EV_WRITE] = conn_write;
-	return c;
+	con->cbs[EV_CLOSE] = conn_close_fatal;
+	con->cbs[EV_AFTER_READ] = conn_write_to_slot;
+	con->cbs[EV_READ] = conn_read;
+	con->cbs[EV_WRITE] = conn_write;
+	return con;
 }
 
 struct conn *add_stdio(struct epoll_cont *e)
 {
-	struct conn *c = epoll_cont_add(e, STDIN_FILENO, STDOUT_FILENO);
-	if (!c)
+	struct conn *con = epoll_cont_add(e, STDIN_FILENO, STDOUT_FILENO);
+
+	if (!con)
 		die2("failed to add stdin");
-	c->cbs[EV_AFTER_READ] = conn_write_to_slot;
-	c->cbs[EV_CLOSE] = conn_close_fatal;
-	return c;
+	con->cbs[EV_AFTER_READ] = conn_write_to_slot;
+	con->cbs[EV_CLOSE] = conn_close_fatal;
+
+	return con;
 }
 
 int main(void)
@@ -67,6 +74,7 @@ int main(void)
 	epoll_cont_init(&e);
 	struct conn *c1 = add_unix_conn(&e);
 	struct conn *c2 = add_stdio(&e);
+
 	c1->data.ptr = c2;
 	c2->data.ptr = c1;
 	epoll_cont_serve(&e);

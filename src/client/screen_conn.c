@@ -12,6 +12,8 @@
 
 void screen_init(struct screen *s)
 {
+	int max_row, max_col;
+
 	memset(s, 0, sizeof(*s));
 
 	initscr();
@@ -19,7 +21,6 @@ void screen_init(struct screen *s)
 	raw();
 	noecho();
 
-	int max_row, max_col;
 	getmaxyx(stdscr, max_row, max_col);
 
 	s->text = newwin(max_row - 2, max_col, 0, 0);
@@ -38,12 +39,13 @@ void screen_init(struct screen *s)
 
 void screen_draw(struct screen *s)
 {
+	int max_row, max_col;
+
 	erase();
 	werase(s->text);
 	werase(s->input);
 	setsyx(0, 0);
 
-	int max_row, max_col;
 	getmaxyx(stdscr, max_row, max_col);
 
 	wresize(s->text, max_row - 2, max_col);
@@ -69,8 +71,10 @@ void screen_status_bar(struct screen *s, int max_col)
 	char status[SCR_NCOL];
 	time_t t = time(NULL);
 	struct tm local;
+	ssize_t n;
+
 	localtime_r(&t, &local);
-	ssize_t n = strftime(status, sizeof(status), "%H:%M:%S", &local);
+	n = strftime(status, sizeof(status), "%H:%M:%S", &local);
 	memmove(&status[max_col - n], status, n);
 	memset(status, ' ', max_col - n);
 	if (s->mode == MODE_INSERT) {
@@ -90,9 +94,11 @@ void screen_status_bar(struct screen *s, int max_col)
 
 void screen_add_line(struct screen *s, AMessage * m)
 {
+	size_t len;
+
 	assert(m->type == MESSAGE_TYPE__ROW);
 
-	size_t len = strlen(m->row->text);
+	len = strlen(m->row->text);
 	memcpy(s->cbuf[s->cpos].s, m->row->text, len);
 	s->cbuf[s->cpos].s[len] = '\0';
 	s->cbuf[s->cpos].ts = m->row->timestamp;
@@ -106,14 +112,17 @@ void screen_draw_buf(struct screen *s)
 {
 	char tbuf[10];
 	char buf[1024];
+
 	for (ssize_t i = 0, p = (IRC_NLINES + s->cpos - s->cn) % IRC_NLINES;
 	     i < s->cn; ++i, p = (IRC_NLINES + p + 1) % IRC_NLINES) {
 		time_t t = s->cbuf[p].ts;
 		struct tm local;
+
 		localtime_r(&t, &local);
 		strftime(tbuf, sizeof(tbuf), "%H:%M:%S ", &local);
 		snprintf(buf, sizeof(buf), "%s%s", tbuf, s->cbuf[p].s);
 		waddch(s->text, '\n');
+
 		for (ssize_t j = 0; isprint(buf[j]); ++j) {
 			waddch(s->text, buf[j]);
 		}
@@ -128,24 +137,28 @@ void screen_destroy(struct screen *s)
 
 struct conn *screen_conn_add(struct epoll_cont *e)
 {
-	struct conn *c = epoll_cont_find_free(e);
-	if (!c)
+	struct conn *con = epoll_cont_find_free(e);
+
+	if (!con)
 		die2("no connection slot for stdin");
-	memset(c, 0, sizeof(*c));
-	c->rfd = STDIN_FILENO;
-	c->wfd = -1;
-	c->cbs[EV_READ] = screen_conn_read;
-	c->cbs[EV_CLOSE] = conn_close_fatal;
-	struct epoll_event ee = {.events = EPOLLIN,.data.ptr = c };
-	if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, c->rfd, &ee) < 0)
+
+	memset(con, 0, sizeof(*con));
+	con->rfd = STDIN_FILENO;
+	con->wfd = -1;
+	con->cbs[EV_READ] = screen_conn_read;
+	con->cbs[EV_CLOSE] = conn_close_fatal;
+	struct epoll_event ee = {.events = EPOLLIN,.data.ptr = con };
+
+	if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, con->rfd, &ee) < 0)
 		die("epoll_ctl");
-	return c;
+	return con;
 }
 
 void screen_conn_push_line(struct epoll_cont *e, struct conn *c)
 {
 	struct screen *s = e->ptr;
 	char *line = s->line;
+
 	if (s->attach_conn != NULL) {
 		line[s->line_len] = '\n';
 		line[s->line_len + 1] = '\0';
@@ -159,6 +172,9 @@ int screen_conn_read(struct epoll_cont *e, struct conn *c, struct event *ev)
 {
 	char ch;
 	ssize_t nread = read(c->rfd, &ch, 1);
+	struct screen *s;
+	int cont;
+
 	if (nread < 0) {
 		log_errno("read");
 		return 0;
@@ -166,11 +182,12 @@ int screen_conn_read(struct epoll_cont *e, struct conn *c, struct event *ev)
 		log("EOF from stdin");
 		return 0;
 	}
-	struct screen *s = e->ptr;
+
+	s = e->ptr;
 	if (!s)
 		die2("screen is NULL");
 
-	int cont = 1;
+	cont = 1;
 	if (s->mode == MODE_REPLACE) {
 		if (isprint(ch)) {
 			s->line[s->cursor_pos] = ch;
@@ -238,5 +255,6 @@ int screen_conn_read(struct epoll_cont *e, struct conn *c, struct event *ev)
 		}
 	}
 	screen_draw(s);
+
 	return cont;
 }

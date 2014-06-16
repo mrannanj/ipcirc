@@ -144,7 +144,8 @@ int irc_conn_after_read(struct epoll_cont *e, struct conn *c, struct event *ev)
 			memcpy(msg, c->in_buf, i + 1);
 			msg[i + 1] = '\0';
 			struct event evt = {.type = EV1_IRC_MESSAGE,.source =
-				    c,.p = msg };
+				    c,.p = msg
+			};
 			epoll_cont_walk(e, &evt);
 			c->in_pos -= i + 1;
 			memmove(c->in_buf, &c->in_buf[i + 1], c->in_pos);
