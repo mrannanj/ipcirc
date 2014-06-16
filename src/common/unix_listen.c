@@ -19,14 +19,17 @@ static const size_t UNIX_LISTEN_BACKLOG = 10;
 
 int unix_listen_read(struct epoll_cont *e, struct conn *c, struct event *ev)
 {
+	struct conn *nc;
+	struct event evt;
 	int client = unix_listen_accept(c->rfd);
 	if (client < 0) {
 		log("didn't accept unix connection");
 		return 1;
 	}
-	struct conn *nc = unix_conn_init(e, client);
+	nc = unix_conn_init(e, client);
 	if (nc) {
-		struct event evt = {.type = EV1_UNIX_ACCEPTED,.source = nc };
+		evt.type = EV1_UNIX_ACCEPTED;
+		evt.source = nc;
 		epoll_cont_walk(e, &evt);
 	}
 	return 1;
@@ -34,17 +37,19 @@ int unix_listen_read(struct epoll_cont *e, struct conn *c, struct event *ev)
 
 int unix_listen_init()
 {
+	size_t path_len;
+	struct sockaddr_un sa;
+	int on = 1;
 	int fd = socket(AF_UNIX, SOCK_STREAM, 0);
 	if (fd < 0)
 		die("socket");
-	size_t path_len = strlen(UNIX_ADDR_PREFIX);
-	struct sockaddr_un sa = {.sun_family = AF_UNIX };
+	path_len = strlen(UNIX_ADDR_PREFIX);
+	sa.sun_family = AF_UNIX;
 	memcpy(sa.sun_path, UNIX_ADDR_PREFIX, path_len);
 	sa.sun_path[0] = '\0';
 	if (bind(fd, (struct sockaddr *)&sa, sizeof(sa.sun_family) + path_len) <
 	    0)
 		die("bind");
-	int on = 1;
 	if (setsockopt(fd, SOL_SOCKET, SO_PASSCRED, &on, sizeof(on)) < 0)
 		die("setsockopt");
 	if (listen(fd, UNIX_LISTEN_BACKLOG) < 0)

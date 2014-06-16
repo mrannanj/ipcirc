@@ -4,7 +4,7 @@
 #include <unistd.h>
 
 struct event {
-  int type;
-  struct conn* source;
-  void *p;
+	int type;
+	struct conn *source;
+	void *p;
 };

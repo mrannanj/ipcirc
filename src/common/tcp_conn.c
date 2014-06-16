@@ -9,20 +9,22 @@
 
 int tcp_conn_init(const char *host, uint16_t port)
 {
+	struct sockaddr_in sa;
+	struct addrinfo *ai = NULL;
+	struct addrinfo hai;
+	int addr_err;
 	int fd = socket(AF_INET, SOCK_STREAM, 0);
+
 	if (fd < 0) {
 		log("socket");
 		return -1;
 	}
 
-	struct sockaddr_in sa;
-	struct addrinfo *ai = NULL;
-	struct addrinfo hai;
 	memset(&hai, 0, sizeof(hai));
 
 	hai.ai_family = AF_INET;
 	hai.ai_socktype = SOCK_STREAM;
-	int addr_err = getaddrinfo(host, 0, &hai, &ai);
+	addr_err = getaddrinfo(host, 0, &hai, &ai);
 	if (addr_err != 0) {
 		log("getaddrinfo: %s", gai_strerror(addr_err));
 		goto err;

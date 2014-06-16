@@ -31,11 +31,11 @@ DEPS += $(DAEMON_OBJ:.o=.d) $(ATTACH_OBJ:.o=.d) $(CLIENT_OBJ:.o=.d)
 
 TARGETS := iirc iircd iirc-attach
 
-W := -Wno-unused-parameter -Wall -Wextra
+W := -Wno-unused-parameter -Wno-variadic-macros -Wall -Wextra
 
 CFLAGS := $(shell pkg-config --cflags ncurses)
 CFLAGS += -Isrc -D_POSIX_SOURCE -D_GNU_SOURCE
-CFLAGS += -g -pedantic -std=c99 $(W) -Werror
+CFLAGS += -g -pedantic -std=c89 $(W) -Werror
 
 LDFLAGS := -lprotobuf-c $(shell pkg-config --libs ncurses)
 LDFLAGS += -Wl,-rpath=\$$ORIGIN:\$$ORIGIN/../lib -L. -liirc
@@ -48,7 +48,7 @@ all: $(TARGETS)
 
 .SECONDARY:
 $(SRC_DIR)/%.pb-c.h $(SRC_DIR)/%.pb-c.c: $(SRC_DIR)/%.proto
-	@echo "PROCOC $@ <- $<"
+	@echo PROTO-C $@
 	@cd $(SRC_DIR); \
 	 protoc-c --c_out=./ $(patsubst $(SRC_DIR)/%, %, $<)
 
@@ -59,7 +59,7 @@ $(OBJ): $(DAEMON_SRC) $(ATTACH_SRC) $(COMMON_SRC) $(PROTO_SRC)
 
 $(LIBIIRC): libiirc($(COMMON_OBJ) $(PROTO_OBJ))
 	@echo LD $@
-	@$(CC) -shared -Wl,-soname,libiirc.so -o $(LIBIIRC) $^
+	@$(CC) -shared -Wl,-soname,$(LIBIIRC) -o $(LIBIIRC) $^
 
 libiirc($(COMMON_OBJ) $(PROTO_OBJ)): $(COMMON_SRC) $(PROTO_SRC)
 	@mkdir -p $(dir $*)
@@ -80,8 +80,9 @@ iirc: $(CLIENT_OBJ) $(LIBIIRC)
 	@echo LD $@
 	@$(CC) $^ -o $@ $(LDFLAGS)
 
-indent: $(COMMON_SRC) $(CLIENT_SRC) $(ATTACH_SRC) $(DAEMON_SRC)
-	indent -linux $^
+indent:
+	indent -linux $(wildcard $(SRC_DIR)/*/*.c)
+	indent -linux $(wildcard $(SRC_DIR)/*/*.h)
 
 install: $(TARGETS)
 	mkdir -p $(PREFIX)/lib

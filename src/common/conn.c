@@ -11,6 +11,8 @@
 struct conn *conn_init(struct epoll_cont *e, int rfd, int wfd)
 {
 	struct conn *c = epoll_cont_find_free(e);
+	struct epoll_event ee;
+
 	if (!c)
 		return NULL;
 	memset(c, 0, sizeof(*c));
@@ -24,10 +26,9 @@ struct conn *conn_init(struct epoll_cont *e, int rfd, int wfd)
 	assert(c->out_buf);
 
 	c->rfd = rfd;
-	struct epoll_event ee = {
-		.events = EPOLLIN | EPOLLHUP | EPOLLERR,
-		.data.ptr = c
-	};
+	ee.events = EPOLLIN | EPOLLHUP | EPOLLERR;
+	ee.data.ptr = c;
+
 	if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, c->rfd, &ee) < 0)
 		die("epoll_ctl");
 
@@ -86,6 +87,7 @@ int conn_read(struct epoll_cont *e, struct conn *c, struct event *ev)
 
 int conn_write(struct epoll_cont *e, struct conn *c, struct event *ev)
 {
+	struct epoll_event ee;
 	ssize_t nwrote = write(c->wfd, c->out_buf, c->out_pos);
 	if (nwrote < 0) {
 		log_errno("write");
@@ -93,10 +95,8 @@ int conn_write(struct epoll_cont *e, struct conn *c, struct event *ev)
 	}
 	c->out_pos -= nwrote;
 	if (c->out_pos == 0) {
-		struct epoll_event ee = {
-			.events = EPOLLHUP | EPOLLERR,
-			.data.ptr = c
-		};
+		ee.events = EPOLLHUP | EPOLLERR;
+		ee.data.ptr = c;
 		epoll_ctl(e->epfd, EPOLL_CTL_MOD, c->wfd, &ee);
 	} else {
 		memmove(c->out_buf, &c->out_buf[nwrote], c->out_pos);
@@ -106,26 +106,28 @@ int conn_write(struct epoll_cont *e, struct conn *c, struct event *ev)
 
 int conn_write_to_slot(struct epoll_cont *e, struct conn *c, struct event *ev)
 {
+	int r;
 	struct conn *target = c->data.ptr;
 	if (target->rfd == -1)
 		return 0;
-	int r = conn_write_buf2(e, target, c->in_buf, c->in_pos);
+	r = conn_write_buf2(e, target, c->in_buf, c->in_pos);
 	c->in_pos = 0;
 	return r;
 }
 
 int conn_write_buf2(struct epoll_cont *e, struct conn *c, char *b, ssize_t len)
 {
+	struct epoll_event ee;
+
 	if (len > CONN_BUFSIZ - c->out_pos) {
 		log("wfd %d write buffer full", c->wfd);
 		return 0;
 	}
 	memcpy(&c->out_buf[c->out_pos], b, len);
 	c->out_pos += len;
-	struct epoll_event ee = {
-		.events = EPOLLOUT | EPOLLHUP | EPOLLERR,
-		.data.ptr = c
-	};
+	ee.events = EPOLLOUT | EPOLLHUP | EPOLLERR;
+	ee.data.ptr = c;
+
 	if (epoll_ctl(e->epfd, EPOLL_CTL_MOD, c->wfd, &ee) < 0) {
 		log_errno("epoll_ctl");
 	}

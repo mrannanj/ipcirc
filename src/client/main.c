@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include "common/common.h"
 #include "proto/iirc.pb-c.h"
 #include "common/epoll_cont.h"
@@ -21,4 +23,5 @@ int main(int argc, char **argv)
 	epoll_cont_serve(&e);
 	epoll_cont_destroy(&e);
 	screen_destroy(&scr);
+	return EXIT_SUCCESS;
 }

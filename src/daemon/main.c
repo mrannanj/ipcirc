@@ -47,4 +47,5 @@ int main(void)
 	irc_conn_init(&e, "irc.freenode.net", 6667);
 	epoll_cont_serve(&e);
 	epoll_cont_destroy(&e);
+	return EXIT_SUCCESS;
 }

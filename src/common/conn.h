@@ -21,28 +21,28 @@
 
 struct epoll_cont;
 
-typedef int (*event_cb)(struct epoll_cont*, struct conn*, struct event*);
+typedef int (*event_cb) (struct epoll_cont *, struct conn *, struct event *);
 
 struct conn {
-  int rfd;
-  int wfd;
-  event_cb cbs[EV_MAX];
-  ssize_t in_pos;
-  ssize_t out_pos;
-  char* in_buf;
-  char* out_buf;
-  union {
-    void* ptr;
-    uint32_t u32;
-    uint64_t u64;
-  } data;
+	int rfd;
+	int wfd;
+	event_cb cbs[EV_MAX];
+	ssize_t in_pos;
+	ssize_t out_pos;
+	char *in_buf;
+	char *out_buf;
+	union {
+		void *ptr;
+		uint32_t u32;
+		uint64_t u64;
+	} data;
 };
 
-struct conn* conn_init(struct epoll_cont*, int, int);
+struct conn *conn_init(struct epoll_cont *, int, int);
 
-int conn_close(struct epoll_cont*, struct conn*, struct event*);
-int conn_close_fatal(struct epoll_cont*, struct conn*, struct event*);
-int conn_read(struct epoll_cont*, struct conn*, struct event*);
-int conn_write(struct epoll_cont*, struct conn*, struct event*);
-int conn_write_to_slot(struct epoll_cont*, struct conn*, struct event*);
-int conn_write_buf2(struct epoll_cont*, struct conn*, char*, ssize_t);
+int conn_close(struct epoll_cont *, struct conn *, struct event *);
+int conn_close_fatal(struct epoll_cont *, struct conn *, struct event *);
+int conn_read(struct epoll_cont *, struct conn *, struct event *);
+int conn_write(struct epoll_cont *, struct conn *, struct event *);
+int conn_write_to_slot(struct epoll_cont *, struct conn *, struct event *);
+int conn_write_buf2(struct epoll_cont *, struct conn *, char *, ssize_t);

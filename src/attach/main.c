@@ -71,12 +71,16 @@ struct conn *add_stdio(struct epoll_cont *e)
 int main(void)
 {
 	struct epoll_cont e;
+	struct conn *c1, *c2;
+
 	epoll_cont_init(&e);
-	struct conn *c1 = add_unix_conn(&e);
-	struct conn *c2 = add_stdio(&e);
+	c1 = add_unix_conn(&e);
+	c2 = add_stdio(&e);
 
 	c1->data.ptr = c2;
 	c2->data.ptr = c1;
 	epoll_cont_serve(&e);
 	epoll_cont_destroy(&e);
+
+	return EXIT_SUCCESS;
 }

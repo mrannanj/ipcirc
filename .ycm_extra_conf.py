@@ -5,9 +5,10 @@ flags = [
   '-Wall',
   '-Wextra',
   '-Wno-unused',
+  '-Wno-unused-parameter',
   '-D_POSIX_SOURCE',
   '-D_GNU_SOURCE',
-  '-std=c99',
+  '-std=c89',
   '-Isrc'
 ]
 # Set this to the absolute path to the folder (NOT the file!) containing the

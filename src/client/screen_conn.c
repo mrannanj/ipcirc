@@ -40,6 +40,7 @@ void screen_init(struct screen *s)
 void screen_draw(struct screen *s)
 {
 	int max_row, max_col;
+	int c;
 
 	erase();
 	werase(s->text);
@@ -60,7 +61,7 @@ void screen_draw(struct screen *s)
 	setsyx(max_row - 2, 0);
 	screen_status_bar(s, max_col);
 
-	for (int c = 0; c < max_col && s->line[c]; ++c)
+	for (c = 0; c < max_col && s->line[c]; ++c)
 		waddch(s->input, s->line[c]);
 	wmove(s->input, 1, s->cursor_pos);
 	wrefresh(s->input);
@@ -72,6 +73,7 @@ void screen_status_bar(struct screen *s, int max_col)
 	time_t t = time(NULL);
 	struct tm local;
 	ssize_t n;
+	int i;
 
 	localtime_r(&t, &local);
 	n = strftime(status, sizeof(status), "%H:%M:%S", &local);
@@ -87,7 +89,7 @@ void screen_status_bar(struct screen *s, int max_col)
 		die2("invalid mode in screen");
 	}
 	status[n] = ' ';
-	for (int i = 0; i < max_col; ++i) {
+	for (i = 0; i < max_col; ++i) {
 		waddch(s->input, status[i]);
 	}
 }
@@ -112,18 +114,20 @@ void screen_draw_buf(struct screen *s)
 {
 	char tbuf[10];
 	char buf[1024];
+	ssize_t i, p;
 
-	for (ssize_t i = 0, p = (IRC_NLINES + s->cpos - s->cn) % IRC_NLINES;
+	for (i = 0, p = (IRC_NLINES + s->cpos - s->cn) % IRC_NLINES;
 	     i < s->cn; ++i, p = (IRC_NLINES + p + 1) % IRC_NLINES) {
 		time_t t = s->cbuf[p].ts;
 		struct tm local;
+		ssize_t j;
 
 		localtime_r(&t, &local);
 		strftime(tbuf, sizeof(tbuf), "%H:%M:%S ", &local);
 		snprintf(buf, sizeof(buf), "%s%s", tbuf, s->cbuf[p].s);
 		waddch(s->text, '\n');
 
-		for (ssize_t j = 0; isprint(buf[j]); ++j) {
+		for (j = 0; isprint(buf[j]); ++j) {
 			waddch(s->text, buf[j]);
 		}
 	}
@@ -138,6 +142,7 @@ void screen_destroy(struct screen *s)
 struct conn *screen_conn_add(struct epoll_cont *e)
 {
 	struct conn *con = epoll_cont_find_free(e);
+	struct epoll_event ee;
 
 	if (!con)
 		die2("no connection slot for stdin");
@@ -147,7 +152,9 @@ struct conn *screen_conn_add(struct epoll_cont *e)
 	con->wfd = -1;
 	con->cbs[EV_READ] = screen_conn_read;
 	con->cbs[EV_CLOSE] = conn_close_fatal;
-	struct epoll_event ee = {.events = EPOLLIN,.data.ptr = con };
+
+	ee.events = EPOLLIN;
+	ee.data.ptr = con;
 
 	if (epoll_ctl(e->epfd, EPOLL_CTL_ADD, con->rfd, &ee) < 0)
 		die("epoll_ctl");

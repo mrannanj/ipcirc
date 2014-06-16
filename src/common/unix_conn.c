@@ -41,10 +41,11 @@ struct conn *unix_conn_init(struct epoll_cont *e, int rfd)
 
 int unix_conn_irc_msg(struct epoll_cont *e, struct conn *c, struct event *ev)
 {
+	uint8_t buf[2048];
+	size_t total_len;
 	if (strncmp(ev->p, "PING", 4) == 0)
 		return 1;
-	uint8_t buf[2048];
-	size_t total_len = irc_conn_pack_row(buf, ev->p);
+	total_len = irc_conn_pack_row(buf, ev->p);
 	conn_write_buf2(e, c, (char *)buf, total_len);
 	return 1;
 }
@@ -52,15 +53,18 @@ int unix_conn_irc_msg(struct epoll_cont *e, struct conn *c, struct event *ev)
 int unix_conn_after_read(struct epoll_cont *e, struct conn *c, struct event *ev)
 {
 	char msg[IRC_MAXLEN];
-	for (ssize_t i = 0; i < c->in_pos;) {
+	ssize_t i;
+	struct event evt;
+
+	for (i = 0; i < c->in_pos;) {
 		const char x = c->in_buf[i];
 		switch (x) {
 		case '\n':
 			memcpy(msg, c->in_buf, i + 1);
 			msg[i + 1] = '\0';
-			struct event evt = {.type = EV1_UNIX_MESSAGE,.source =
-				    c,.p = msg
-			};
+			evt.type = EV1_UNIX_MESSAGE;
+			evt.source = c;
+			evt.p = msg;
 			epoll_cont_walk(e, &evt);
 			c->in_pos -= i + 1;
 			memmove(c->in_buf, &c->in_buf[i + 1], c->in_pos);

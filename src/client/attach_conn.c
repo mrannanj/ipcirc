@@ -87,13 +87,13 @@ int attach_conn_after_read(struct epoll_cont *e, struct conn *con,
 {
 	while (con->in_pos >= (ssize_t) sizeof(uint16_t)) {
 		uint16_t len;
+		AMessage *m;
 
 		memcpy(&len, con->in_buf, sizeof(uint16_t));
 		len = ntohs(len);
 		if (con->in_pos + sizeof(uint16_t) < len)
 			break;
-		AMessage *m =
-		    amessage__unpack(NULL, len, (uint8_t *) & con->in_buf[2]);
+		m = amessage__unpack(NULL, len, (uint8_t *) & con->in_buf[2]);
 		if (m && m->type == MESSAGE_TYPE__ROW) {
 			screen_add_line(e->ptr, m);
 		}
