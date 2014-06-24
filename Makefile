@@ -31,7 +31,7 @@ DEPS += $(DAEMON_OBJ:.o=.d) $(ATTACH_OBJ:.o=.d) $(CLIENT_OBJ:.o=.d)
 
 TARGETS := iirc iircd iirc-attach
 
-W := -Wno-unused-parameter -Wno-variadic-macros -Wall -Wextra
+W := -Wno-unused-parameter -Wno-variadic-macros -Wshadow -Wall -Wextra
 
 CFLAGS := $(shell pkg-config --cflags ncurses)
 CFLAGS += -Isrc -D_POSIX_SOURCE -D_GNU_SOURCE
